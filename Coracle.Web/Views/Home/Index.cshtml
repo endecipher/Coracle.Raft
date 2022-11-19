@@ -1,0 +1,85 @@
+﻿@{
+    ViewData["Title"] = "Home Page";
+}
+
+<div class="container">
+    <div class="row">&nbsp;</div>
+    <div class="row">
+        <div class="col-2">Message</div>
+        <div class="col-4"><input type="text" id="logInput" /></div>
+    </div>
+    <div class="row">&nbsp;</div>
+    <div class="row">
+        <div class="col-6">
+            <input type="button" class="btn-primary" id="sendButton" value="Send Log To Append" />
+        </div>
+    </div>
+</div>
+<div class="row">
+    <div class="col-12">
+        <hr />
+    </div>
+</div>
+<div class="row">
+    <div class="col-3">
+            <div class="row">
+                <input type="text" id="noteHeader" placeholder="Unique Note Header"/>
+            </div>
+            <div class="row">&nbsp;</div>
+            <div class="row">
+                <input type="text" id="noteText" placeholder="Enter Note Text"/> 
+            </div>
+            <div class="row">&nbsp;</div>
+            <div class="row">
+                <button type="button" class="btn-secondary" id="addNoteBtn" onclick="addNote()">Add Note</button>
+            </div>
+            <div class="row">&nbsp;</div>
+            <input type="hidden" value="@Url.Action("AddNote", "Command")"/>
+            <div id="commandResult" class="badge">
+            <!-- ajax content will load here -->
+            <!-- you can put the form inside this div -->
+            <!-- so after submit the result will replace the form controls -->
+            </div>
+    </div>
+    <div class="col-1">
+        &nbsp;
+    </div>
+    <div class="col-3" style="padding-right: 0.5em">
+        <form method="post"
+                data-ajax="true"
+                data-ajax-method="post"
+                data-ajax-url="@Url.Action("GetNote", "Command")"
+                data-ajax-loading="#loadingGet"
+                data-ajax-mode="replace"
+                data-ajax-update="#updateGetAction">
+            <div class="row">
+                <input type="text" name="noteHeader" placeholder="Unique Note HeaderId to Get"/>
+            </div>
+            <div class="row">&nbsp;</div>
+            <div class="row">
+                <input type="button" class="btn-secondary" id="getNoteButton" value="Get Note" />
+            </div>
+            <div class="row">&nbsp;</div>
+            <span id="loadingGet" style="display:none;"> <i class="fas fa-spinner fa-spin"></i></span>
+            <div id="updateGetAction">
+            <!-- ajax content will load here -->
+            <!-- you can put the form inside this div -->
+            <!-- so after submit the result will replace the form controls -->
+            </div>
+        </form>
+    </div>
+    <div class="col-1">
+        &nbsp;
+    </div>
+    <div class="col-4 panel" style="overflow-y: auto; overflow-x: hidden; height: 20em">
+        <ol id="logList"></ol>
+    </div>
+</div>
+<script src="~/lib/signalr/dist/browser/signalr.js"></script>
+<script src="~/js/log.js"></script>
+<script src="~/js/command.js"></script>
+<script src="~/lib/bootstrap/dist/js/bootstrap.min.js"></script>
+
+
+
+
