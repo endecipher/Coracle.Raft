@@ -6,7 +6,10 @@ using System.Threading.Tasks;
 namespace Core.Raft.Canoe.Engine.Discovery
 {
     /// <summary>
-    /// Transient in nature
+    /// Implementation of this interface facilitates the storage and retrieval of all up and running Coracle Nodes.
+    /// Usually, an external Registar server holds this responsibility. 
+    /// However, it is possible for Coracle to adapt to a file-based configuration system if the implementation of this interface deals with configuration files.
+    /// 
     /// </summary>
     public interface IDiscoverer
     {
@@ -26,5 +29,15 @@ namespace Core.Raft.Canoe.Engine.Discovery
         /// Usually called explicitly, or by the Registry Server to indicate an updated configuration 
         /// </summary>
         Task RefreshDiscovery();
+
+        /// <summary>
+        /// The Service Discovery registar server should know that this Current Node is the Leader.
+        /// In case there any configuration changes, the Discovery Server should send the updated Configuration to this Node back.
+        /// </summary>
+        /// <param name="registrarUri"></param>
+        /// <param name="configuration"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        Task<IDiscoveryOperation> NotifyCurrentNodeAsLeader(Uri registrarUri, INodeConfiguration configuration, CancellationToken cancellationToken);
     }
 }

@@ -1,8 +1,8 @@
-﻿using Core.Raft.Canoe.Engine.Command;
-using Newtonsoft.Json;
+﻿using Core.Raft.Canoe.Engine.Configuration.Cluster;
 
 namespace Core.Raft.Canoe.Engine.Logs
 {
+
     /// <summary>
     /// In Search of an Understandable Consensus Algorithm - (Extended Version) Diego Ongaro and John Ousterhout Stanford University <c>[Section 4 - End Para]</c>
     /// 
@@ -20,19 +20,28 @@ namespace Core.Raft.Canoe.Engine.Logs
     /// <see cref="IPersistentReplicatedLogHolder"/> which deals with LogEntries
     /// </para>
     /// </summary>
-    public class LogEntry 
-    {
-        public ICommand Command { get; init; }
+    /// 
 
-        public bool HasCommand => Command != null;
+    public sealed class LogEntry
+    {
+        public object Contents { get; init; }
+        
+        /// <summary>
+        /// Signifies Contents as Empty - during No-Operation Log Entries, system will supply as null
+        /// </summary>
+        public bool IsEmpty { get; init; }
+
+        /// <summary>
+        /// Signifies that the underlying Contents denote a Command to be executed
+        /// </summary>
+        public bool IsExecutable { get; init; }
+
+        /// <summary>
+        /// Signifies that the underlying Contents are actually an enumerable of <see cref="NodeConfiguration"/> 
+        /// </summary>
+        public bool IsConfiguration { get; init; }
 
         public long Term { get; init; }
-
         public long CurrentIndex { get; init; }
-
-        public override string ToString()
-        {
-            return JsonConvert.SerializeObject(this);
-        }
     }
 }

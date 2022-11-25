@@ -7,6 +7,7 @@ using Core.Raft.Canoe.Engine.Configuration.Cluster;
 using Core.Raft.Canoe.Engine.Helper;
 using Core.Raft.Canoe.Engine.Node;
 using Core.Raft.Canoe.Engine.Remoting;
+using Core.Raft.Canoe.Engine.States.LeaderState;
 using EventGuidance.Responsibilities;
 using System;
 using System.Threading.Tasks;
@@ -37,6 +38,9 @@ namespace Core.Raft.Canoe.Engine.States
         IHeartbeatTimer HeartbeatTimer { get; }
         IRemoteManager RemoteManager { get; }
         ICurrentStateAccessor CurrentStateAccessor { get; }
+        IAppendEntriesManager AppendEntriesManager { get; }
+        IClusterConfigurationChanger ClusterConfigurationChanger { get; }
+        IElectionManager ElectionManager { get; }
 
         #endregion
 
@@ -53,7 +57,10 @@ namespace Core.Raft.Canoe.Engine.States
             IEngineConfiguration engineConfiguration,
             IHeartbeatTimer heartbeatTimer,
             IRemoteManager remoteManager,
-            ICurrentStateAccessor currentStateAccessor
+            ICurrentStateAccessor currentStateAccessor,
+            IAppendEntriesManager appendEntriesManager,
+            IClusterConfigurationChanger clusterConfigurationChanger,
+            IElectionManager electionManager
             )
         {
             ActivityLogger = activityLogger;
@@ -68,6 +75,9 @@ namespace Core.Raft.Canoe.Engine.States
             HeartbeatTimer = heartbeatTimer;
             RemoteManager = remoteManager;
             CurrentStateAccessor = currentStateAccessor;
+            AppendEntriesManager = appendEntriesManager;
+            ClusterConfigurationChanger = clusterConfigurationChanger;
+            ElectionManager = electionManager;
         }
 
         /// <summary>
@@ -120,8 +130,6 @@ namespace Core.Raft.Canoe.Engine.States
 
             if (!canContinue)
             {
-                
-
                 //TODO: I think we can log Exception and not do anything
                 ActivityLogger?.Log(new CoracleActivity
                 {
@@ -166,9 +174,8 @@ namespace Core.Raft.Canoe.Engine.States
 
             state.LeaderNodePronouncer = LeaderNodePronouncer;
             state.LeaderProperties = new LeaderVolatileProperties(ActivityLogger, ClusterConfiguration, PersistentState);
-            state.AppendEntriesMonitor = new LeaderState.AppendEntriesMonitor(ActivityLogger, ClusterConfiguration, EngineConfiguration, GlobalAwaiter);
+            state.AppendEntriesManager = AppendEntriesManager;
             state.HeartbeatTimer = HeartbeatTimer;
-            state.RemoteManager = RemoteManager;
         }
 
         private void FillCandidateDependencies(IChangingState newState)
@@ -179,7 +186,7 @@ namespace Core.Raft.Canoe.Engine.States
 
             var state = newState as ICandidateDependencies;
 
-            state.ElectionSession = new ElectionSession(ActivityLogger, ClusterConfiguration, this);
+            state.ElectionManager = ElectionManager;
             state.RemoteManager = RemoteManager;
         }
 
@@ -200,6 +207,7 @@ namespace Core.Raft.Canoe.Engine.States
             state.ElectionTimer = ElectionTimer;
             state.GlobalAwaiter = GlobalAwaiter;
             state.ClientRequestHandler = ClientRequestHandler;
+            state.ClusterConfigurationChanger = ClusterConfigurationChanger;
         }
 
         #region Validations

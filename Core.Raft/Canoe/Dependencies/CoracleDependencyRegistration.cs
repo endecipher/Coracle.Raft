@@ -8,6 +8,7 @@ using Core.Raft.Canoe.Engine.Helper;
 using Core.Raft.Canoe.Engine.Node;
 using Core.Raft.Canoe.Engine.Remoting;
 using Core.Raft.Canoe.Engine.States;
+using Core.Raft.Canoe.Engine.States.LeaderState;
 using EventGuidance.Dependency;
 
 namespace Core.Raft.Canoe.Dependencies
@@ -39,14 +40,18 @@ namespace Core.Raft.Canoe.Dependencies
     /// <list type="bullet">
     /// <item><see cref = "IExternalClientCommandHandler" /> - For handling inbound client commands </item>
     /// <item><see cref = "INodeConfiguration" /> - For creating a <see cref="NodeConfiguration"/> POCO </item>
-    /// <item><see cref = "IClusterConfiguration" /> - For seeing the cluster nodes identified and being communicated with. //TODO: MAke sure ConcurrentDictionary cannot be added to from outside</item>
+    /// <item><see cref = "IClusterConfiguration" /> - For seeing the cluster nodes identified and being communicated with. This stores the internal Configuration of the Cluster in memory. </item>
     /// <item><see cref = "ICanoeNode" /> - For initialization and system operations on the Coracle Node</item>
     /// <item><see cref = "IExternalRpcHandler" /> - For handling inbound RPC calls from other Coracle nodes</item>
     /// <item><see cref = "ICurrentStateAccessor" /> - For holding the Current State used by the entire application</item>
+    /// <item><see cref = "IClusterConfigurationChanger" /> - For changing the internal <see cref="IClusterConfiguration"/> during <see cref="IExternalConfigurationChangeHandler.IssueConfigurationChange(ConfigurationChangeRPC, System.Threading.CancellationToken)"/></item>
+    /// <item><see cref = "IAppendEntriesManager" /> - For centrally managing outbound AppendEntriesRPC during <see cref="Leader"/> state</item>
+    /// <item><see cref = "IElectionManager" /> - For centrally managing outbound RequestVoteRPC during <see cref="Candidate"/> state</item>
+    /// <item><see cref = "IExternalConfigurationChangeHandler" /> - For handling inbound RPC calls issued for configuration change</item>
     /// </list>
     /// 
     /// </summary>
-    public class CoracleDependencyRegistration : IDependencyRegistration
+    public sealed class CoracleDependencyRegistration : IDependencyRegistration
     {
         public void Register(IDependencyContainer container)
         {
@@ -62,6 +67,10 @@ namespace Core.Raft.Canoe.Dependencies
             container.RegisterSingleton<IEngineConfiguration, EngineConfigurationSettings>(); //All internal. No need for it to be called 
             container.RegisterTransient<IStateChanger, StateChanger>();
             container.RegisterSingleton<ICurrentStateAccessor, CurrentStateAccessor>();
+            container.RegisterSingleton<IClusterConfigurationChanger, ClusterConfigurationChanger>();
+            container.RegisterSingleton<IAppendEntriesManager, AppendEntriesManager>();
+            container.RegisterSingleton<IElectionManager, ElectionManager>();
+            container.RegisterTransient<IExternalConfigurationChangeHandler, ExternalConfigurationChangeHandler>();
         }
     }
 }

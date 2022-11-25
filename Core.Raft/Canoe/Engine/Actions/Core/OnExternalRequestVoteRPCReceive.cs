@@ -1,11 +1,8 @@
 ﻿using ActivityLogger.Logging;
 using Core.Raft.Canoe.Engine.Actions.Contexts;
 using Core.Raft.Canoe.Engine.ActivityLogger;
-using Core.Raft.Canoe.Engine.Configuration;
-using Core.Raft.Canoe.Engine.Configuration.Cluster;
 using Core.Raft.Canoe.Engine.Remoting.RPC;
 using Core.Raft.Canoe.Engine.States;
-using EventGuidance.Dependency;
 using EventGuidance.Structure;
 using System;
 using System.Threading;
@@ -16,7 +13,7 @@ namespace Core.Raft.Canoe.Engine.Actions
     /// <summary>
     /// If we receive this, then surely there exists an External Candidate Fellow Server. 
     /// </summary>
-    internal class OnExternalRequestVoteRPCReceive : EventAction<OnExternalRPCReceiveContext<RequestVoteRPC>, RequestVoteRPCResponse>
+    internal sealed class OnExternalRequestVoteRPCReceive : EventAction<OnExternalRPCReceiveContext<RequestVoteRPC>, RequestVoteRPCResponse>
     {
         #region Constants
 

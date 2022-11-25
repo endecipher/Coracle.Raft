@@ -18,7 +18,9 @@ namespace Core.Raft.Canoe.Engine.Configuration
 
         public void SetNewLeader(string leaderServerId)
         {
-            if (ClusterConfiguration.Peers.TryGetValue(leaderServerId, out var configuration))
+            var configuration = ClusterConfiguration.GetPeerNodeConfiguration(leaderServerId);
+            
+            if (configuration != null)
             {
                 RecognizedLeaderConfiguration = configuration;
                 return;
@@ -29,6 +31,9 @@ namespace Core.Raft.Canoe.Engine.Configuration
 
         public void SetRunningNodeAsLeader()
         {
+            if (!ClusterConfiguration.IsThisNodePartOfCluster)
+                throw new InvalidOperationException($"Cannot recognize leader if not part of the cluster"); //Impossible scenario
+
             RecognizedLeaderConfiguration = ClusterConfiguration.ThisNode;
 
             //TODO: Configuration Change: Discoverer.

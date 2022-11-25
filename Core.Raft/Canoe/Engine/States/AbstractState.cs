@@ -2,11 +2,13 @@
 using Core.Raft.Canoe.Engine.Actions.Awaiters;
 using Core.Raft.Canoe.Engine.ActivityLogger;
 using Core.Raft.Canoe.Engine.ClientHandling;
+using Core.Raft.Canoe.Engine.Command;
 using Core.Raft.Canoe.Engine.Configuration;
 using Core.Raft.Canoe.Engine.Configuration.Cluster;
 using Core.Raft.Canoe.Engine.Helper;
 using EventGuidance.Responsibilities;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace Core.Raft.Canoe.Engine.States
@@ -20,10 +22,11 @@ namespace Core.Raft.Canoe.Engine.States
         IElectionTimer ElectionTimer { get; set; }
         IResponsibilities Responsibilities { get; set; }
         IClusterConfiguration ClusterConfiguration { get; set; }
+        IClusterConfigurationChanger ClusterConfigurationChanger { get; set; }
         IEngineConfiguration EngineConfiguration { get; set; }
     }
 
-    internal abstract class AbstractState : IChangingState, IStateDependencies
+    internal abstract class AbstractState : IChangingState, IStateDependencies, IHandleConfigurationChange
     {
         #region Constants
 
@@ -39,6 +42,7 @@ namespace Core.Raft.Canoe.Engine.States
         public const string LastApplied = nameof(LastApplied);
         public const string CommitIndex = nameof(CommitIndex);
         public const string Resuming = nameof(Resuming);
+        public const string Decomissioning = nameof(Decomissioning);
         public const string Pausing = nameof(Pausing);
         public const string Exception = nameof(Exception);
 
@@ -51,6 +55,7 @@ namespace Core.Raft.Canoe.Engine.States
         public IElectionTimer ElectionTimer { get; set; }
         public IResponsibilities Responsibilities { get; set; }
         public IClusterConfiguration ClusterConfiguration { get; set; }
+        public IClusterConfigurationChanger ClusterConfigurationChanger { get; set; }
         public IEngineConfiguration EngineConfiguration { get; set; }
 
 
@@ -102,12 +107,93 @@ namespace Core.Raft.Canoe.Engine.States
             .With(ActivityParam.New(NewCommitIndex, newIndex))
             .WithCallerInfo());
 
+            if (newIndex <= VolatileState.CommitIndex)
+            {
+                ActivityLogger?.Log(new CoracleActivity
+                {
+                    Description = $"New Commit Index cannot be lesser than/equal to the old one",
+                    EntitySubject = AbstractStateEntity,
+                    Event = ApplyingLogEntry,
+                    Level = ActivityLogLevel.Error,
+
+                }
+                .With(ActivityParam.New(NewCommitIndex, newIndex))
+                .With(ActivityParam.New(OldCommitIndex, VolatileState.CommitIndex))
+                .WithCallerInfo());
+
+                return;
+            }
+
             lock (commitIndexLock)
             {
 
-                if (newIndex <= VolatileState.CommitIndex)
+
+                /// <remarks>
+                /// Raft never commits log entries from previous terms by counting replicas. Only log entries from the leader’s current
+                /// term are committed by counting replicas; once an entry from the current term has been committed in this way,
+                /// then all prior entries are committed indirectly because of the Log Matching Property.
+                /// 
+                /// There are some situations where a leader could safely conclude that an older log entry is committed
+                /// (for example, if that entry is stored on every server), but Raft takes a more conservative approach for simplicity.
+                /// <seealso cref="Section 5.4.2 Committing entries from previous terms"/>
+                /// </remarks>
+
+                while (VolatileState.CommitIndex > VolatileState.LastApplied)
                 {
-                    throw new ArgumentException($"New Commit Index cannot be lesser than/equal to the old one");
+                    try
+                    {
+
+                        ActivityLogger?.Log(new CoracleActivity
+                        {
+                            Description = $"Updating Commit Index from {VolatileState.CommitIndex} to {newIndex}",
+                            EntitySubject = AbstractStateEntity,
+                            Event = CommitGreatherThanLastApplied,
+                            Level = ActivityLogLevel.Debug,
+
+                        }
+                        .With(ActivityParam.New(CommitIndex, VolatileState.CommitIndex))
+                        .With(ActivityParam.New(LastApplied, VolatileState.LastApplied))
+                        .With(ActivityParam.New(NewCommitIndex, newIndex))
+                        .WithCallerInfo());
+
+                        VolatileState.LastApplied++;
+
+                        var entryToApply = PersistentState.LogEntries.TryGetValueAtIndex(VolatileState.LastApplied).GetAwaiter().GetResult();
+
+
+                        ActivityLogger?.Log(new CoracleActivity
+                        {
+                            Description = $"Applying Log Entry {entryToApply}",
+                            EntitySubject = AbstractStateEntity,
+                            Event = ApplyingLogEntry,
+                            Level = ActivityLogLevel.Debug,
+
+                        }
+                        .With(ActivityParam.New(LogEntry, entryToApply))
+                        .WithCallerInfo());
+
+                        if (entryToApply.IsEmpty || entryToApply.IsConfiguration || !entryToApply.IsExecutable)
+                            continue;
+
+                        var commandToApply = PersistentState.LogEntries.ReadFrom<ICommand>(commandLogEntry: entryToApply).GetAwaiter().GetResult();
+
+                        //TODO: Order should be enforced
+                        ClientRequestHandler.ExecuteAndApplyLogEntry(commandToApply).RunSynchronously();
+                    }
+                    catch (Exception ex)
+                    {
+                        ActivityLogger?.Log(new CoracleActivity
+                        {
+                            Description = $"Caught during State Machine application for Commit Index {newIndex}",
+                            EntitySubject = AbstractStateEntity,
+                            Event = ApplyingLogEntry,
+                            Level = ActivityLogLevel.Error,
+
+                        }
+                        .With(ActivityParam.New(Exception, ex))
+                        .With(ActivityParam.New(NewCommitIndex, newIndex))
+                        .WithCallerInfo());
+                    }
                 }
 
                 /// <remarks>
@@ -115,77 +201,17 @@ namespace Core.Raft.Canoe.Engine.States
                 /// </remarks>
                 VolatileState.CommitIndex = newIndex;
             }
-
-
-            /// <remarks>
-            /// Raft never commits log entries from previous terms by counting replicas. Only log entries from the leader’s current
-            /// term are committed by counting replicas; once an entry from the current term has been committed in this way,
-            /// then all prior entries are committed indirectly because of the Log Matching Property.
-            /// 
-            /// There are some situations where a leader could safely conclude that an older log entry is committed
-            /// (for example, if that entry is stored on every server), but Raft takes a more conservative approach for simplicity.
-            /// <seealso cref="Section 5.4.2 Committing entries from previous terms"/>
-            /// </remarks>
-
-            while (VolatileState.CommitIndex > VolatileState.LastApplied)
-            {
-                try
-                {
-
-                    ActivityLogger?.Log(new CoracleActivity
-                    {
-                        Description = $"Updating Commit Index from {VolatileState.CommitIndex} to {newIndex}",
-                        EntitySubject = AbstractStateEntity,
-                        Event = CommitGreatherThanLastApplied,
-                        Level = ActivityLogLevel.Debug,
-
-                    }
-                    .With(ActivityParam.New(CommitIndex, VolatileState.CommitIndex))
-                    .With(ActivityParam.New(LastApplied, VolatileState.LastApplied))
-                    .With(ActivityParam.New(NewCommitIndex, newIndex))
-                    .WithCallerInfo());
-
-                    VolatileState.LastApplied++;
-
-                    var entryToApply = PersistentState.LogEntries.TryGetValueAtIndex(VolatileState.LastApplied).GetAwaiter().GetResult();
-
-
-                    ActivityLogger?.Log(new CoracleActivity
-                    {
-                        Description = $"Applying Log Entry {entryToApply}",
-                        EntitySubject = AbstractStateEntity,
-                        Event = ApplyingLogEntry,
-                        Level = ActivityLogLevel.Debug,
-
-                    }
-                    .With(ActivityParam.New(LogEntry, entryToApply))
-                    .WithCallerInfo());
-
-                    if (!entryToApply.HasCommand)
-                        continue;
-
-                    //TODO: Order should be enforced
-                    ClientRequestHandler.ExecuteAndApplyLogEntry(entryToApply.Command).RunSynchronously();
-
-                    GlobalAwaiter.CommandApplication.SignalDone();
-                }
-                catch (Exception ex)
-                {
-                    ActivityLogger?.Log(new CoracleActivity
-                    {
-                        Description = $"Caught during State Machine application for Commit Index {newIndex}",
-                        EntitySubject = AbstractStateEntity,
-                        Event = ApplyingLogEntry,
-                        Level = ActivityLogLevel.Error,
-
-                    }
-                    .With(ActivityParam.New(Exception, ex))
-                    .With(ActivityParam.New(NewCommitIndex, newIndex))
-                    .WithCallerInfo());
-                }
-            }
-            
         }
+
+        #endregion
+
+        #region Configuration Change
+
+        public virtual void HandleConfigurationChange(IEnumerable<INodeConfiguration> newPeerNodeConfigurations)
+        {
+
+        }
+
         #endregion
 
 
@@ -205,7 +231,7 @@ namespace Core.Raft.Canoe.Engine.States
             ElectionTimer.Dispose();
             await PersistentState.ClearVotedFor();
 
-            Responsibilities.ConfigureNew(assigneeId: ClusterConfiguration.ThisNode.UniqueNodeId);
+            Responsibilities.ConfigureNew(assigneeId: EngineConfiguration.NodeId);
         }
 
         public virtual Task InitializeOnStateChange(IVolatileProperties volatileProperties)
@@ -267,6 +293,29 @@ namespace Core.Raft.Canoe.Engine.States
             .WithCallerInfo());
 
             StateValue = PausedStateValue;
+        }
+
+        public void Decomission()
+        {
+            ActivityLogger?.Log(new CoracleActivity
+            {
+                EntitySubject = AbstractStateEntity,
+                Event = Resuming,
+                Level = ActivityLogLevel.Debug,
+
+            }
+            .WithCallerInfo());
+
+            StateValue = StateValues.Abandoned;
+
+            /// Configuring new responsibilities means that EventProcessor is stopped, and supplying invokableActionNames with a random "Abandoned", means that
+            /// no Enqueued actions will be able to execute.
+            /// StateChanger.Initialize may have to be called to get it up and running again.
+            Responsibilities.ConfigureNew(invokableActionNames: new System.Collections.Generic.HashSet<string>
+            {
+                StateValues.Abandoned.ToString()
+            }, 
+            EngineConfiguration.NodeId);
         }
 
         #endregion

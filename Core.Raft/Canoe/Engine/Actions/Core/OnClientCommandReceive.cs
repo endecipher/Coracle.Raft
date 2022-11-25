@@ -1,15 +1,11 @@
 ﻿using ActivityLogger.Logging;
-using Core.Raft.Canoe.Engine.Actions.Awaiters;
 using Core.Raft.Canoe.Engine.Actions.Contexts;
 using Core.Raft.Canoe.Engine.ActivityLogger;
 using Core.Raft.Canoe.Engine.ClientHandling;
 using Core.Raft.Canoe.Engine.Command;
-using Core.Raft.Canoe.Engine.Configuration;
 using Core.Raft.Canoe.Engine.Configuration.Cluster;
 using Core.Raft.Canoe.Engine.Exceptions;
 using Core.Raft.Canoe.Engine.States;
-using EventGuidance.Dependency;
-using EventGuidance.Responsibilities;
 using EventGuidance.Structure;
 using System;
 using System.Threading;
@@ -20,7 +16,7 @@ namespace Core.Raft.Canoe.Engine.Actions
     /// <summary>
     /// This is invoked from the node to handle a Client Command
     /// </summary>
-    internal class OnClientCommandReceive<TCommand> : EventAction<OnClientCommandReceiveContext<TCommand>, ClientHandlingResult> where TCommand : class, ICommand //where TCommandResult : ClientHandlingResult, new() 
+    internal sealed class OnClientCommandReceive<TCommand> : EventAction<OnClientCommandReceiveContext<TCommand>, ClientHandlingResult> where TCommand : class, ICommand //where TCommandResult : ClientHandlingResult, new() 
     {
         #region Constants
 
@@ -41,7 +37,6 @@ namespace Core.Raft.Canoe.Engine.Actions
         /// The TimeConfiguration maybe changed dynamically on observation of the system
         /// </summary>
         private IEngineConfiguration Configuration => Input.EngineConfiguration;
-        private IClusterConfiguration ClusterConfiguration => Input.ClusterConfiguration;
         private bool IncludeCommand => Input.EngineConfiguration.IncludeOriginalClientCommandInResults;
 
         public override string UniqueName => ActionName;
@@ -54,9 +49,7 @@ namespace Core.Raft.Canoe.Engine.Actions
         }, activityLogger)
         { }
 
-        //TODO: Proper Config
         public override TimeSpan TimeOut => TimeSpan.FromMilliseconds(Configuration.ClientCommandTimeout_InMilliseconds);
-        protected override TimeSpan? ShouldProceedTimeOut => TimeSpan.FromMilliseconds(Configuration.ClientCommandTimeout_InMilliseconds);
 
         #region Workflow
 
@@ -71,20 +64,22 @@ namespace Core.Raft.Canoe.Engine.Actions
             };
         }
 
-
-        /// <summary>
-        /// Clients of Raft send all of their requests to the leader.
-        /// When a client first starts up, it connects to a randomly chosen server. If the client’s first choice is not the leader,
-        /// that server will reject the client’s request and supply information about the most recent leader it has heard from
-        /// (AppendEntries requests include the network address of
-        /// the leader). If the leader crashes, client requests will time
-        /// out; clients then try again with randomly-chosen servers.
-        /// 
-        /// <see cref="Section 8 Client Interaction"/>
-        /// </summary>
-        /// <returns></returns>
-        protected override async Task<bool> ShouldProceed()
+        protected override Task<bool> ShouldProceed()
         {
+            return Task.FromResult(Input.IsContextValid);
+        }
+
+        protected override async Task<ClientHandlingResult> Action(CancellationToken cancellationToken)
+        {
+            /// <remarks>
+            /// Clients of Raft send all of their requests to the leader.
+            /// When a client first starts up, it connects to a randomly chosen server. If the client’s first choice is not the leader,
+            /// that server will reject the client’s request and supply information about the most recent leader it has heard from
+            /// (AppendEntries requests include the network address of the leader). If the leader crashes, client requests will time
+            /// out; clients then try again with randomly-chosen servers.
+            /// 
+            /// <seealso cref="Section 8 Client Interaction"/>
+            /// </remarks>
             while (!Input.LeaderNodePronouncer.IsLeaderRecognized)
             {
                 CancellationManager.ThrowIfCancellationRequested();
@@ -103,17 +98,13 @@ namespace Core.Raft.Canoe.Engine.Actions
                 await Task.Delay(Configuration.NoLeaderElectedWaitInterval_InMilliseconds, CancellationManager.CoreToken);
             }
 
-            return await Task.FromResult(Input.IsContextValid);
-        }
-
-        protected override async Task<ClientHandlingResult> Action(CancellationToken cancellationToken)
-        {
             ClientHandlingResult result;
 
             /// <remarks>
             /// The leader handles all client requests (if a client contacts a follower, the follower redirects it to the leader).
-            /// <see cref="Section 5.1 Raft Basics"/>
+            /// <seealso cref="Section 5.1 Raft Basics"/>
             /// </remarks>
+            //TODO: Remove ForwardToLeader Logic. And just return back that, hey, this is not the leader.
             if (Input.State is not Leader || !Input.IsContextValid)
             {
                 ActivityLogger?.Log(new CoracleActivity
@@ -139,24 +130,36 @@ namespace Core.Raft.Canoe.Engine.Actions
                 return result;
             }
 
-            var leaderState = Input.State as Leader;
-
             /// <remarks>
             /// A leader must check whether it has been deposed before processing a read-only request (its information may be stale if a more recent leader has been elected).
             /// Raft handles this by having the leader exchange heartbeat messages with a majority of the cluster before responding to read - only requests.
-            /// <see cref="Section 8 Client Interaction"/>
+            /// <seealso cref="Section 8 Client Interaction"/>
             /// </remarks>
-            if (Input.Command.IsReadOnly)
+            if (Input.Command.IsReadOnly && Input.State is Leader leaderState)
             {
                 leaderState.SendHeartbeat(null);
 
-                Input.GlobalAwaiter.OngoingLeaderConfirmation.Wait(TimeOut, cancellationToken);
+                Input.GlobalAwaiter.AwaitNoDeposition(cancellationToken);
 
-                await Input.ClientRequestHandler.TryGetCommandResult<TCommand>(Input.Command, out var clientHandlingResult);
+                if (Input.State.StateValue.IsLeader())
+                {
+                    await Input.ClientRequestHandler.TryGetCommandResult<TCommand>(Input.Command, out var clientHandlingResult);
+                    return clientHandlingResult;
+                }
+                else
+                {
+                    result = new ClientHandlingResult
+                    {
+                        IsOperationSuccessful = false,
+                        LeaderNodeConfiguration = Input.LeaderNodePronouncer.RecognizedLeaderConfiguration,
+                        Exception = ClientCommandDeniedException.New(),
+                        OriginalCommand = IncludeCommand ? Input.Command : null,
+                    };
 
-                return clientHandlingResult;
+                    return result;
+                }
             }
-            else
+            else if (!Input.Command.IsReadOnly && Input.State.StateValue.IsLeader())
             {
                 /// <remarks>
                 /// We just append the Log Entry, thus increasing the Last Log Index. 
@@ -197,9 +200,6 @@ namespace Core.Raft.Canoe.Engine.Actions
                 /// </remarks>
                 var logEntry = await Input.PersistentState.LogEntries.AppendNewEntry<TCommand>(Input.Command);
 
-                var session = leaderState.AppendEntriesMonitor.Create(Input.UniqueCommandId);
-
-
                 /// <remarks>
                 /// Each client request contains a command to be executed by the replicated state machines. 
                 /// The leader appends the command to its log as a new entry, then issues AppendEntries RPCs in parallel to each of the other
@@ -215,45 +215,20 @@ namespace Core.Raft.Canoe.Engine.Actions
                 /// Servers retry RPCs if they do not receive a response in a timely manner, and they issue RPCs in parallel for best performance.
                 /// <see cref="Section 5.1 End Para"/>
                 /// </summary>
-                Parallel.ForEach(source: ClusterConfiguration.Peers.Values, body: (nodeConfig) =>
+                /// 
+
+                ActivityLogger?.Log(new CoracleActivity
                 {
-                    var action = new OnSendAppendEntriesRPCLogs(input: nodeConfig, session, Input.State, new OnSendAppendEntriesRPCContextDependencies
-                    {
-                        ClusterConfiguration = Input.ClusterConfiguration,
-                        EngineConfiguration = Input.EngineConfiguration,
-                        PersistentState = Input.PersistentState,
-                        RemoteManager = Input.RemoteManager,
-                        Responsibilities = Input.Responsibilities
-                    }, ActivityLogger);
+                    EntitySubject = ActionName,
+                    Event = NotifyOtherNodes,
+                    Level = ActivityLogLevel.Debug,
 
-                    action.SupportCancellation();
+                }
+                .With(ActivityParam.New(CommandId, Input.UniqueCommandId))
+                .With(ActivityParam.New(CurrentState, Input.State.StateValue.ToString()))
+                .WithCallerInfo());
 
-                    action.CancellationManager.Bind(cancellationToken);
-
-                    //session.AddCancelHandler(action.CancellationManager.TriggerCancellation);
-
-                    ActivityLogger?.Log(new CoracleActivity
-                    {
-                        Description = $"Queueing {action.UniqueName} for {nodeConfig.UniqueNodeId}",
-                        EntitySubject = ActionName,
-                        Event = NotifyOtherNodes,
-                        Level = ActivityLogLevel.Debug,
-
-                    }
-                    .With(ActivityParam.New(CommandId, Input.UniqueCommandId))
-                    .With(ActivityParam.New(CurrentState, Input.State.StateValue.ToString()))
-                    .With(ActivityParam.New(NodeId, nodeConfig.UniqueNodeId))
-                    .With(ActivityParam.New(NodeActionName, action.UniqueName))
-                    .WithCallerInfo());
-
-                    Input.Responsibilities.QueueEventAction(action, executeSeparately: false);
-                },
-                parallelOptions: new ParallelOptions
-                {
-                    CancellationToken = cancellationToken,
-                });
-
-
+                Input.AppendEntriesManager.InitiateAppendEntries();
 
                 ClientHandlingResult clientHandlingResult;
 
@@ -267,23 +242,24 @@ namespace Core.Raft.Canoe.Engine.Actions
                 /// or if network packets are lost, the leader retries AppendEntries RPCs indefinitely (even after it has responded to
                 /// the client) until all followers eventually store all log entries.
                 /// </remarks>
-                while (!await Input.ClientRequestHandler.TryGetCommandResult<TCommand>(Input.Command, out clientHandlingResult))
-                {
-                    CancellationManager.ThrowIfCancellationRequested();
-                    /// <remarks>
-                    /// Wait for UpdateCommitIndex to apply some Commands. 
-                    /// 
-                    /// NOTE:
-                    /// This may seem risky, but if somehow some error occurs during those parallel tasks above (Like networking/RPC issues),
-                    /// then they will again be retried, as the documentation states.
-                    /// 
-                    /// If all are kept on retrying, then there is a major issue, since Majority nodes could not be reached, and this task should timeout.
-                    /// 
-                    /// If something happens in another thread which makes the State change from the current Leader, then ideally this task will be cancelled, as
-                    /// this OnClientCommand was initiated with executeSeparately false. (Thus binded with Responsibilities.CoreToken)
-                    /// </remarks>
-                    Input.GlobalAwaiter.CommandApplication.Wait(TimeOut, cancellationToken);
-                }
+                /// 
+                //TODO: Make sure that Global Awaiter is a dependency which makes us wait until a specific log entry index is comitted. This thing is used like everywhere
+
+                Input.GlobalAwaiter.AwaitEntryCommit(logEntry.CurrentIndex, cancellationToken);
+
+                /// <remarks>
+                /// Wait for UpdateCommitIndex to apply some Commands. 
+                /// 
+                /// NOTE:
+                /// This may seem risky, but if somehow some error occurs during those parallel tasks above (Like networking/RPC issues),
+                /// then they will again be retried, as the documentation states.
+                /// 
+                /// If all are kept on retrying, then there is a major issue, since Majority nodes could not be reached, and this task should timeout.
+                /// 
+                /// If something happens in another thread which makes the State change from the current Leader, then ideally this task will be cancelled, as
+                /// this OnClientCommand was initiated with executeSeparately false. (Thus binded with Responsibilities.CoreToken)
+                /// </remarks>
+                await Input.ClientRequestHandler.TryGetCommandResult<TCommand>(Input.Command, out clientHandlingResult);
 
                 ActivityLogger?.Log(new CoracleActivity
                 {
@@ -298,7 +274,16 @@ namespace Core.Raft.Canoe.Engine.Actions
 
                 return clientHandlingResult;
             }
-            
+            else
+            {
+                return new ClientHandlingResult
+                {
+                    IsOperationSuccessful = false,
+                    LeaderNodeConfiguration = Input.LeaderNodePronouncer.RecognizedLeaderConfiguration,
+                    Exception = ClientCommandDeniedException.New(),
+                    OriginalCommand = IncludeCommand ? Input.Command : null,
+                };
+            }
         }
 
         #endregion

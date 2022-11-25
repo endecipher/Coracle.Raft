@@ -1,8 +1,11 @@
 ﻿using ActivityLogger.Logging;
 using Core.Raft.Canoe.Engine.ActivityLogger;
 using Core.Raft.Canoe.Engine.Configuration;
+using Core.Raft.Canoe.Engine.Configuration.Cluster;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace Core.Raft.Canoe.Engine.States
@@ -15,7 +18,7 @@ namespace Core.Raft.Canoe.Engine.States
     /// matchIndex[] for each server, index of highest log entry known to be replicated on server (initialized to 0, increases monotonically)
     /// <see cref="Figure 2 State"/>
     /// </summary>
-    internal class LeaderVolatileProperties : IDisposable
+    internal class LeaderVolatileProperties : IHandleConfigurationChange, IDisposable
     {
         #region Constants
 
@@ -39,6 +42,9 @@ namespace Core.Raft.Canoe.Engine.States
         private const string UpdatedNextIndex = nameof(UpdatedNextIndex);
         private const string Initializing = nameof(Initializing);
         private const string LastPersistedIndex = nameof(LastPersistedIndex);
+        private const string NewConfigurationManagement = nameof(NewConfigurationManagement);
+        private const string NodesToAdd = nameof(NodesToAdd);
+        private const string NodesToRemove = nameof(NodesToRemove);
 
         #endregion
 
@@ -64,7 +70,7 @@ namespace Core.Raft.Canoe.Engine.States
 
             foreach (var peer in ClusterConfiguration.Peers)
             {
-                string externalServerId = peer.Key;
+                string externalServerId = peer.UniqueNodeId;
 
                 //TODO: Check if +1 works okay, else remove :/
                 NextIndexForServers.TryAdd(externalServerId, lastIndex + 1);
@@ -372,6 +378,54 @@ namespace Core.Raft.Canoe.Engine.States
             PersistentState = null;
             NextIndexForServers = null;
             MatchIndexForServers = null;
+        }
+
+        public void HandleConfigurationChange(IEnumerable<INodeConfiguration> newPeerNodeConfigurations)
+        {
+            var newClusterMemberIds = newPeerNodeConfigurations.ToDictionary(x => x.UniqueNodeId, y => y);
+
+            var serverIdsWhichHaveBeenRemoved = new HashSet<string>();
+
+            foreach (var currentNodeId in NextIndexForServers.Keys)
+            {
+                if (newClusterMemberIds.ContainsKey(currentNodeId))
+                {
+                    newClusterMemberIds.Remove(currentNodeId);
+                }
+                else
+                {
+                    serverIdsWhichHaveBeenRemoved.Add(currentNodeId);
+                }
+            }
+
+            var serverIdsWhichHaveBeenAdded = newClusterMemberIds;
+
+            if (serverIdsWhichHaveBeenAdded.Count > 0)
+            {
+                var lastIndex = PersistentState.LogEntries.GetLastIndex().GetAwaiter().GetResult();
+
+                foreach (var node in serverIdsWhichHaveBeenAdded)
+                {
+                    NextIndexForServers.TryAdd(node.Key, lastIndex + 1);
+                    MatchIndexForServers.TryAdd(node.Key, 0);
+                }
+            }
+
+            foreach (var nodeId in serverIdsWhichHaveBeenRemoved)
+            {
+                NextIndexForServers.TryRemove(nodeId, out var n);
+                MatchIndexForServers.TryRemove(nodeId, out var m);
+            }
+
+            ActivityLogger?.Log(new CoracleActivity
+            {
+                EntitySubject = LeaderVolatilePropertiesEntity,
+                Event = NewConfigurationManagement,
+                Level = ActivityLogLevel.Debug,
+            }
+            .With(ActivityParam.New(NodesToRemove, serverIdsWhichHaveBeenRemoved))
+            .With(ActivityParam.New(NodesToAdd, serverIdsWhichHaveBeenAdded))
+            .WithCallerInfo());
         }
     }
 }

@@ -11,7 +11,7 @@ using System.Threading;
 
 namespace Core.Raft.Canoe.Engine.Node
 {
-    internal sealed class CanoeNode : ICanoeNode//, ICanoeNodeState
+    internal sealed class CanoeNode : ICanoeNode
     {
         #region Constants
 
@@ -115,7 +115,7 @@ namespace Core.Raft.Canoe.Engine.Node
             if (IsStarted) throw new InvalidOperationException($"{nameof(Start)} called already");
 
             //New Responsibilities
-            Responsibilities.ConfigureNew(assigneeId: ClusterConfiguration.ThisNode.UniqueNodeId);
+            Responsibilities.ConfigureNew(assigneeId: EngineConfiguration.NodeId);
 
             //Validate if all is okay
 

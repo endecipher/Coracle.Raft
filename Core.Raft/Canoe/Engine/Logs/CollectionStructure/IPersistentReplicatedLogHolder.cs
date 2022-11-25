@@ -1,4 +1,6 @@
-﻿using Core.Raft.Canoe.Engine.Command;
+﻿using Core.Raft.Canoe.Engine.Actions.Contexts;
+using Core.Raft.Canoe.Engine.Command;
+using Core.Raft.Canoe.Engine.Configuration.Cluster;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -105,6 +107,25 @@ namespace Core.Raft.Canoe.Engine.Logs.CollectionStructure
         /// <typeparam name="TCommand"></typeparam>
         /// <param name="inputCommand"></param>
         Task<LogEntry> AppendNewEntry<TCommand>(TCommand inputCommand) where TCommand : class, ICommand; //where TCommandResult : ClientHandlingResult, new();
+
+
+        /// <remarks>
+        /// Each log entry stores a state machine command along with the term number when the entry was received by the leader.
+        /// The term numbers in log entries are used to detect inconsistencies between logs and to ensure some of the properties
+        /// in Figure 3. Each log entry also has an integer index identifying its position in the log.
+        /// <seealso cref="Section 5.3 Log Replication"/>
+        /// </remarks>
+        /// <summary>
+        /// Extension logic.
+        /// Creates a new LogEntry with the Input Command is not already present.
+        /// </summary>
+        /// <typeparam name="TCommand"></typeparam>
+        /// <param name="inputCommand"></param>
+        Task<LogEntry> AppendConfigurationEntry(IEnumerable<NodeConfiguration> configurations);
+
+        Task<IEnumerable<NodeConfiguration>> ReadFrom(LogEntry configurationLogEntry);
+        Task<ICommand> ReadFrom<ICommand>(LogEntry commandLogEntry);
+
 
         Task AppendNoOperationEntry();
 

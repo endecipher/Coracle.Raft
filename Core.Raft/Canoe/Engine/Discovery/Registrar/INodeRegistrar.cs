@@ -19,5 +19,4 @@ namespace Core.Raft.Canoe.Engine.Discovery.Registrar
 
         Task<IDiscoveryOperation> GetAllNodes(CancellationToken cancellationToken);
     }
-
 }

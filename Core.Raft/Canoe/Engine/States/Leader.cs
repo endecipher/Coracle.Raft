@@ -2,9 +2,11 @@
 using Core.Raft.Canoe.Engine.Actions;
 using Core.Raft.Canoe.Engine.ActivityLogger;
 using Core.Raft.Canoe.Engine.Configuration;
+using Core.Raft.Canoe.Engine.Configuration.Cluster;
 using Core.Raft.Canoe.Engine.Helper;
 using Core.Raft.Canoe.Engine.Remoting;
 using Core.Raft.Canoe.Engine.States.LeaderState;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace Core.Raft.Canoe.Engine.States
@@ -14,8 +16,7 @@ namespace Core.Raft.Canoe.Engine.States
         IHeartbeatTimer HeartbeatTimer { get; set; }
         ILeaderNodePronouncer LeaderNodePronouncer { get; set; }
         LeaderVolatileProperties LeaderProperties { get; set; }
-        AppendEntriesMonitor AppendEntriesMonitor { get; set; }
-        IRemoteManager RemoteManager { get; set; }
+        IAppendEntriesManager AppendEntriesManager { get; set; }
     }
 
     /// <summary>
@@ -43,24 +44,11 @@ namespace Core.Raft.Canoe.Engine.States
         public IHeartbeatTimer HeartbeatTimer { get; set; }
         public ILeaderNodePronouncer LeaderNodePronouncer { get; set; }
         public LeaderVolatileProperties LeaderProperties { get; set; }
-        public AppendEntriesMonitor AppendEntriesMonitor { get; set; }
-        public IRemoteManager RemoteManager { get; set; }
+        public IAppendEntriesManager AppendEntriesManager { get; set; }
         #endregion
 
         public void SendHeartbeat(object state)
         {
-            var session = AppendEntriesMonitor.Create();
-
-            var actionDependencies = new Actions.Contexts.OnSendAppendEntriesRPCContextDependencies
-            {
-                EngineConfiguration = EngineConfiguration,
-                ClusterConfiguration = ClusterConfiguration,
-                PersistentState = PersistentState,
-                RemoteManager = RemoteManager,
-                Responsibilities = Responsibilities
-            };
-
-
             /// <summary>
             /// Servers retry RPCs if they do not receive a response in a timely manner, and they issue RPCs in parallel for best performance.
             /// <see cref="Section 5.1 End Para"/>
@@ -70,19 +58,8 @@ namespace Core.Raft.Canoe.Engine.States
             /// and begins an election to choose a new leader
             /// <see cref="Section 5.2 Leader Election"/>
             /// </summary>
-            Parallel.ForEach(source: ClusterConfiguration.Peers.Values, body: (config) =>
-            {
-                var action = new OnSendAppendEntriesRPCHeartbeat(input: config, session, this, actionDependencies, ActivityLogger);
-
-                action.SupportCancellation();
-
-                /// Execute Separately makes sure Binding is done with Global Token
-                Responsibilities.QueueEventAction(action, executeSeparately: false);
-            }, 
-            parallelOptions: new ParallelOptions
-            {
-                CancellationToken = Responsibilities.GlobalCancellationToken,
-            });
+            /// 
+            AppendEntriesManager.InitiateAppendEntries();
         }
 
         protected override void OnElectionTimeout(object state) { }
@@ -93,7 +70,6 @@ namespace Core.Raft.Canoe.Engine.States
 
             LeaderProperties.Dispose();
             HeartbeatTimer.Dispose();
-            AppendEntriesMonitor.Dispose();
         }
 
         public override async Task InitializeOnStateChange(IVolatileProperties volatileProperties)
@@ -166,19 +142,17 @@ namespace Core.Raft.Canoe.Engine.States
         /// 
         /// <see cref="Figure 2 Rules For Servers | Leaders"/>
         /// </summary>
-        internal async Task CheckIfCommitIndexNeedsUpdatation(AppendEntriesSession session, string externalServerId)
+        internal async Task CheckIfCommitIndexNeedsUpdatation(string externalServerId = null)
         {
             ActivityLogger?.Log(new CoracleActivity
             {
-                Description = $"Success Response Received from {externalServerId} for AppendEntriesRPC Session {session}",
+                Description = $"Success Response Received from {externalServerId} for AppendEntriesRPC",
                 EntitySubject = LeaderEntity,
                 Event = CheckForCommitIndexUpdateDueToSuccessfulResponse,
                 Level = ActivityLogLevel.Debug,
 
             }
             .With(ActivityParam.New(NodeId, externalServerId))
-            .With(ActivityParam.New(SessionId, session.UniqueSessionId))
-            .With(ActivityParam.New(IsFromCommand, session.FromCommand))
             .WithCallerInfo());
 
             var currentTerm = await PersistentState.GetCurrentTerm();
@@ -208,6 +182,12 @@ namespace Core.Raft.Canoe.Engine.States
                     return;
                 }
             }
+        }
+
+        public override void HandleConfigurationChange(IEnumerable<INodeConfiguration> newPeerNodeConfigurations)
+        {
+            (AppendEntriesManager as IHandleConfigurationChange).HandleConfigurationChange(newPeerNodeConfigurations);
+            (LeaderProperties as IHandleConfigurationChange).HandleConfigurationChange(newPeerNodeConfigurations);
         }
     }
 }

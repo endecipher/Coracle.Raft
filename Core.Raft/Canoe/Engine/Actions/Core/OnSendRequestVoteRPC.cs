@@ -1,14 +1,9 @@
 ﻿using ActivityLogger.Logging;
 using Core.Raft.Canoe.Engine.Actions.Contexts;
 using Core.Raft.Canoe.Engine.ActivityLogger;
-using Core.Raft.Canoe.Engine.Configuration;
 using Core.Raft.Canoe.Engine.Configuration.Cluster;
-using Core.Raft.Canoe.Engine.Helper;
-using Core.Raft.Canoe.Engine.Remoting;
 using Core.Raft.Canoe.Engine.Remoting.RPC;
 using Core.Raft.Canoe.Engine.States;
-using EventGuidance.Dependency;
-using EventGuidance.Responsibilities;
 using EventGuidance.Structure;
 using System;
 using System.Threading;
@@ -19,7 +14,7 @@ namespace Core.Raft.Canoe.Engine.Actions
     /// <summary>
     /// We send this to all other servers during our election
     /// </summary>
-    internal class OnSendRequestVoteRPC : EventAction<OnSendRequestVoteRPCContext, IRequestVoteRPCResponse>
+    internal sealed class OnSendRequestVoteRPC : EventAction<OnSendRequestVoteRPCContext, IRequestVoteRPCResponse>
     {
         #region Constants
         public const string ActionName = nameof(OnSendRequestVoteRPC);
@@ -30,15 +25,14 @@ namespace Core.Raft.Canoe.Engine.Actions
         private const string ResponseObject = nameof(ResponseObject);
         private const string SendingOnException = nameof(SendingOnException);
         #endregion
+        
         public override string UniqueName => ActionName;
         public override TimeSpan TimeOut => TimeSpan.FromMilliseconds(Input.EngineConfiguration.RequestVoteTimeoutOnSend_InMilliseconds);
-        int MaxRetryCounter => Input.EngineConfiguration.SendRequestVoteRPC_MaxRetryInfinityCounter;
 
-        public OnSendRequestVoteRPC(INodeConfiguration input, Guid sessionGuid, IChangingState state, OnSendRequestVoteRPCContextDependencies actionDependencies, IActivityLogger activityLogger = null) : base(new OnSendRequestVoteRPCContext(state, actionDependencies)
+        public OnSendRequestVoteRPC(INodeConfiguration targetNode, long currentTerm, OnSendRequestVoteRPCContextDependencies actionDependencies, IActivityLogger activityLogger = null) : base(new OnSendRequestVoteRPCContext(targetNode, currentTerm, actionDependencies)
         {
-            SessionGuid = sessionGuid,
             InvocationTime = DateTimeOffset.UtcNow,
-            NodeConfiguration = input
+
         }, activityLogger) { }
 
         /// <summary>
@@ -47,15 +41,7 @@ namespace Core.Raft.Canoe.Engine.Actions
         /// <returns></returns>
         protected override Task<bool> ShouldProceed()
         {
-            //TODO: Across all ShouldProceeds for any sort of Event Action, shouldn't we ensure that the State is disposed properly, 
-            //Since on retry, we may be acting on stale data, IF cancellation Tokens do not do the job?
-
-            if (Input.IsContextValid && Input.CurrentRetryCounter < MaxRetryCounter && (Input.State as Candidate).ElectionSession.SessionGuid.Equals(Input.SessionGuid))
-            {
-                return Task.FromResult(true);
-            }
-
-            return Task.FromResult(false);
+            return Task.FromResult(Input.IsContextValid && (Input.State as Candidate).ElectionManager.CanSendTowards(Input.NodeConfiguration.UniqueNodeId, Input.ElectionTerm));
         }
 
         /// <summary>
@@ -65,13 +51,12 @@ namespace Core.Raft.Canoe.Engine.Actions
         /// <returns></returns>
         protected override async Task<IRequestVoteRPCResponse> Action(CancellationToken cancellationToken)
         {
-            var currentTerm = await Input.PersistentState.GetCurrentTerm();
             var lastLogEntry = await Input.PersistentState.LogEntries.TryGetValueAtLastIndex();
 
             var callObject = new RequestVoteRPC
             {
-                Term = currentTerm,
-                CandidateId = Input.ClusterConfiguration.ThisNode.UniqueNodeId,
+                Term = Input.ElectionTerm,
+                CandidateId = Input.EngineConfiguration.NodeId,
                 LastLogIndex = lastLogEntry.CurrentIndex,
                 LastLogTerm = lastLogEntry.Term
             };
@@ -121,32 +106,34 @@ namespace Core.Raft.Canoe.Engine.Actions
                 .With(ActivityParam.New(InputData, Input))
                 .WithCallerInfo());
 
-                Input.Responsibilities.QueueEventAction(action: this, executeSeparately: false);
-            }
-            else if (result.Response.VoteGranted)
-            {
-                (Input.State as Candidate).ElectionSession.ReceiveVoteFrom(Input.SessionGuid, Input.NodeConfiguration.UniqueNodeId);
+                (Input.State as Candidate).ElectionManager.IssueRetry(Input.NodeConfiguration.UniqueNodeId);
             }
             else
             {
-                (Input.State as Candidate).ElectionSession.ReceiveNoConfidenceVoteFrom(Input.SessionGuid, Input.NodeConfiguration.UniqueNodeId); 
+                (Input.State as Candidate).ElectionManager.UpdateFor(result.Response.Term, Input.NodeConfiguration.UniqueNodeId, result.Response.VoteGranted); 
             }
 
             return result.Response;
         }
 
+        /// <remarks>
+        /// If a follower or candidate crashes, then future RequestVote and AppendEntries RPCs sent to it will
+        /// fail.Raft handles these failures by retrying indefinitely; if the crashed server restarts, then the RPC will complete
+        /// successfully.If a server crashes after completing an RPC but before responding, then it will receive the same RPC
+        /// again after it restarts.Raft RPCs are idempotent, so this causes no harm.For example, if a follower receives an
+        /// AppendEntries request that includes log entries already present in its log, it ignores those entries in the new request
+        /// <seealso cref="Section 5.5 Follower and candidate crashes"/>
+        /// </remarks>
         protected override Task OnTimeOut()
         {
-            lock (Input)
-            {
-                Input.CurrentRetryCounter++;
-            }
+            (Input.State as Candidate).ElectionManager.IssueRetry(Input.NodeConfiguration.UniqueNodeId);
 
-            //Interlocked.Increment(ref Input.CurrentRetryCounter);
+            return Task.CompletedTask;
+        }
 
-            //TODO: TimeCalculator for tracking and calculating times
-
-            Input.Responsibilities.QueueEventAction(this, true);
+        protected override Task OnFailure()
+        {
+            (Input.State as Candidate).ElectionManager.IssueRetry(Input.NodeConfiguration.UniqueNodeId);
 
             return Task.CompletedTask;
         }

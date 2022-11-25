@@ -1,4 +1,5 @@
-﻿using Core.Raft.Canoe.Engine.Remoting.RPC;
+﻿using Core.Raft.Canoe.Engine.Operational;
+using Core.Raft.Canoe.Engine.Remoting.RPC;
 using System.Threading;
 using System.Threading.Tasks;
 

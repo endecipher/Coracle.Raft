@@ -2,26 +2,29 @@
 using Core.Raft.Canoe.Engine.Actions;
 using Core.Raft.Canoe.Engine.Actions.Contexts;
 using Core.Raft.Canoe.Engine.ActivityLogger;
+using Core.Raft.Canoe.Engine.Configuration.Cluster;
 using Core.Raft.Canoe.Engine.Remoting;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace Core.Raft.Canoe.Engine.States
 {
     internal interface ICandidateDependencies : IStateDependencies
     {
-        ElectionSession ElectionSession { get; set; }
+        IElectionManager ElectionManager { get; set; }
         IRemoteManager RemoteManager { get; set; }
     }
 
     internal sealed class Candidate : AbstractState, ICandidateDependencies
     {
         #region Constants
-        private const string CandidateEntity = nameof(Candidate);
-        private const string StartingElection = nameof(StartingElection);
+        public const string Entity = nameof(Candidate);
+        public const string StartingElection = nameof(StartingElection);
+        public const string incrementedTerm = nameof(incrementedTerm);
         #endregion
 
         #region Additional Dependencies
-        public ElectionSession ElectionSession { get; set; }
+        public IElectionManager ElectionManager { get; set; }
         public IRemoteManager RemoteManager { get; set; }
 
         #endregion
@@ -65,62 +68,26 @@ namespace Core.Raft.Canoe.Engine.States
         /// <returns></returns>
         public async Task StartElection()
         {
+            var term = await PersistentState.IncrementCurrentTerm();
+
             ActivityLogger.Log(new CoracleActivity
             {
-                EntitySubject = CandidateEntity,
+                EntitySubject = Entity,
                 Event = StartingElection,
                 Level = ActivityLogLevel.Debug
             }
+            .With(ActivityParam.New(incrementedTerm, term))
             .WithCallerInfo());
 
-            await PersistentState.IncrementCurrentTerm();
-
-            //IMPTODO: ElectionSession should be initialized with Term and CancellationToken, if another Timeout is initiated
 
             ElectionTimer.ResetWithDifferentTimeout();
 
-            var actionDependencies = new OnSendRequestVoteRPCContextDependencies
-            {
-                ClusterConfiguration = ClusterConfiguration,
-                PersistentState = PersistentState,
-                EngineConfiguration = EngineConfiguration,
-                RemoteManager = RemoteManager,
-                Responsibilities = Responsibilities
-            };
-
-            /// <summary>
-            /// Servers retry RPCs if they do not receive a response in a timely manner, and they issue RPCs in parallel for best performance.
-            /// <see cref="Section 5.1 End Para"/>
-            /// 
-            /// To begin an election, a follower increments its current term and transitions to candidate state. 
-            /// It then votes for itself and issues RequestVote RPCs in parallel to each of the other servers in the cluster.
-            /// A candidate continues in this state until one of three things happens: 
-            ///     (a) it wins the election, 
-            ///     (b) another server establishes itself as leader, or
-            ///     (c) a period of time goes by with no winner
-            ///     
-            /// <see cref="Section 5.2 Leader Election"/>  
-            /// </summary>
-            Parallel.ForEach(source: ClusterConfiguration.Peers.Values, body: (config) =>
-            {
-                var action = new OnSendRequestVoteRPC(input: config, ElectionSession.SessionGuid, this, actionDependencies, ActivityLogger);
-                
-                action.SupportCancellation();
-
-                action.CancellationManager.Bind(ElectionSession.CancellationToken);
-
-                Responsibilities.QueueEventAction(action, executeSeparately: false);
-            },
-            parallelOptions: new ParallelOptions
-            {
-                CancellationToken = Responsibilities.GlobalCancellationToken,
-            });
+            ElectionManager.Initiate(term);
         }
 
         public override async Task OnStateChangeBeginDisposal()
         {
-            ElectionSession.CancelSessionIfExists();
-            ElectionSession = null;
+            ElectionManager.CancelSessionIfExists();
 
             await base.OnStateChangeBeginDisposal();
 
@@ -132,6 +99,11 @@ namespace Core.Raft.Canoe.Engine.States
             await base.OnStateEstablishment();
 
             await StartElection();
+        }
+
+        public override void HandleConfigurationChange(IEnumerable<INodeConfiguration> newPeerNodeConfigurations)
+        {
+            ElectionManager.HandleConfigurationChange(newPeerNodeConfigurations);
         }
     }
 }

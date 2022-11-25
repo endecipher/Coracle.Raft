@@ -5,14 +5,15 @@ using Core.Raft.Canoe.Engine.States;
 
 namespace Core.Raft.Canoe.Engine.Actions.Contexts
 {
-    internal class OnExternalRPCReceiveContextDependencies
+    internal sealed class OnExternalRPCReceiveContextDependencies
     {
+        internal IClusterConfigurationChanger ClusterConfigurationChanger { get; set; }
         internal IEngineConfiguration EngineConfiguration { get; set; }
         internal IPersistentProperties PersistentState { get; set; }
         internal ILeaderNodePronouncer LeaderNodePronouncer { get; set; }
     }
 
-    internal class OnExternalRPCReceiveContext<T> : IActionContext where T : IRemoteCall
+    internal sealed class OnExternalRPCReceiveContext<T> : IActionContext where T : IRemoteCall
     {
         public OnExternalRPCReceiveContext(IChangingState state, OnExternalRPCReceiveContextDependencies dependencies) : base()
         {
@@ -22,16 +23,17 @@ namespace Core.Raft.Canoe.Engine.Actions.Contexts
 
         internal T Request { get; set; }
         internal IChangingState State { get; set; }
-        public OnExternalRPCReceiveContextDependencies Dependencies { get; }
+        OnExternalRPCReceiveContextDependencies Dependencies { get; set; }
 
         public bool IsContextValid => !State.IsDisposed && !State.StateValue.IsAbandoned() && !State.StateValue.IsNotStarted();
 
 
 
         #region Action Dependencies
-        public IEngineConfiguration EngineConfiguration => Dependencies.EngineConfiguration;
-        public IPersistentProperties PersistentState => Dependencies.PersistentState;
-        public ILeaderNodePronouncer LeaderNodePronouncer => Dependencies.LeaderNodePronouncer;
+        internal IEngineConfiguration EngineConfiguration => Dependencies.EngineConfiguration;
+        internal IPersistentProperties PersistentState => Dependencies.PersistentState;
+        internal ILeaderNodePronouncer LeaderNodePronouncer => Dependencies.LeaderNodePronouncer;
+        internal IClusterConfigurationChanger ClusterConfigurationChanger => Dependencies.ClusterConfigurationChanger;
 
         #endregion
 
@@ -39,6 +41,7 @@ namespace Core.Raft.Canoe.Engine.Actions.Contexts
         {
             Request = default(T);
             State = null;
+            Dependencies = null;
         }
     }
 }

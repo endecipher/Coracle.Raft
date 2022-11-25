@@ -13,5 +13,4 @@ namespace Core.Raft.Canoe.Engine.Discovery.Registrar
         Task<IEnumerable<NodeConfiguration>> GetAll();
         Task TryRemove(string nodeId);
     }
-
 }

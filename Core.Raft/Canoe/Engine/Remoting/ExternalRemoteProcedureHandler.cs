@@ -3,6 +3,7 @@ using Core.Raft.Canoe.Engine.Actions;
 using Core.Raft.Canoe.Engine.Configuration;
 using Core.Raft.Canoe.Engine.Configuration.Cluster;
 using Core.Raft.Canoe.Engine.Node;
+using Core.Raft.Canoe.Engine.Operational;
 using Core.Raft.Canoe.Engine.Remoting.RPC;
 using Core.Raft.Canoe.Engine.States;
 using EventGuidance.Dependency;
@@ -19,7 +20,14 @@ namespace Core.Raft.Canoe.Engine.Remoting
     /// </summary>
     internal sealed class ExternalRemoteProcedureHandler : IExternalRpcHandler
     {
-        public ExternalRemoteProcedureHandler(IActivityLogger activityLogger, IResponsibilities responsibilities, ICurrentStateAccessor currentStateAccessor, IEngineConfiguration engineConfiguration, IPersistentProperties persistentState, ILeaderNodePronouncer leaderNodePronouncer)
+        public ExternalRemoteProcedureHandler(
+            IActivityLogger activityLogger, 
+            IResponsibilities responsibilities, 
+            ICurrentStateAccessor currentStateAccessor, 
+            IEngineConfiguration engineConfiguration, 
+            IPersistentProperties persistentState, 
+            ILeaderNodePronouncer leaderNodePronouncer,
+            IClusterConfigurationChanger clusterConfigurationChanger)
         {
             ActivityLogger = activityLogger;
             Responsibilities = responsibilities;
@@ -27,6 +35,7 @@ namespace Core.Raft.Canoe.Engine.Remoting
             EngineConfiguration = engineConfiguration;
             PersistentState = persistentState;
             LeaderNodePronouncer = leaderNodePronouncer;
+            ClusterConfigurationChanger = clusterConfigurationChanger;
         }
 
         IActivityLogger ActivityLogger { get; }
@@ -35,6 +44,7 @@ namespace Core.Raft.Canoe.Engine.Remoting
         public IEngineConfiguration EngineConfiguration { get; }
         public IPersistentProperties PersistentState { get; }
         public ILeaderNodePronouncer LeaderNodePronouncer { get; }
+        public IClusterConfigurationChanger ClusterConfigurationChanger { get; }
 
         public ExternalRemoteProcedureHandler()
         {
@@ -51,7 +61,9 @@ namespace Core.Raft.Canoe.Engine.Remoting
                 {
                     EngineConfiguration = EngineConfiguration,
                     PersistentState = PersistentState,
-                    LeaderNodePronouncer = LeaderNodePronouncer
+                    LeaderNodePronouncer = LeaderNodePronouncer,
+                    ClusterConfigurationChanger = ClusterConfigurationChanger,
+                    
                 }, ActivityLogger);
 
                 action.SupportCancellation();

@@ -5,6 +5,7 @@ using Core.Raft.Canoe.Engine.States;
 using ActivityLogger.Logging;
 using ActivityLogLevel = ActivityLogger.Logging.ActivityLogLevel;
 using Coracle.IntegrationTests.Components.Logging;
+using Newtonsoft.Json;
 
 namespace Coracle.IntegrationTests.Components.PersistentData
 {
@@ -35,7 +36,10 @@ namespace Coracle.IntegrationTests.Components.PersistentData
                 {
                     CurrentIndex = 0,
                     Term = 0,
-                    Command = null
+                    Contents = null as ICommand,
+                    IsConfiguration = false,
+                    IsEmpty = true,
+                    IsExecutable = false,
                 }
             };
             Properties = persistentProperties;
@@ -53,7 +57,7 @@ namespace Coracle.IntegrationTests.Components.PersistentData
                 Event = eventString,
                 Level = ActivityLogLevel.Debug,
             }
-            .With(ActivityParam.New(LogChain, LogEntries.Select(x => x.ToString()).Aggregate((x, y) => $"{x} -> {y}")))
+            .With(ActivityParam.New(LogChain, LogEntries.Select(x => JsonConvert.SerializeObject(x)).Aggregate((x, y) => $"{x} -> {y}")))
             .WithCallerInfo());
         }
 
@@ -83,7 +87,10 @@ namespace Coracle.IntegrationTests.Components.PersistentData
                 {
                     CurrentIndex = LogEntries.Count() - 1,
                     Term = term,
-                    Command = inputCommand
+                    Contents = inputCommand,
+                    IsConfiguration = false,
+                    IsExecutable = true,
+                    IsEmpty = false
                 };
 
                 LogEntries.Add(item);
@@ -104,7 +111,11 @@ namespace Coracle.IntegrationTests.Components.PersistentData
                 {
                     CurrentIndex = LogEntries.Count - 1,
                     Term = term,
-                    Command = null
+                    Contents = null,
+                    IsExecutable = false,
+                    IsConfiguration = false,
+                    IsEmpty = true,
+
                 };
 
                 LogEntries.Add(item);

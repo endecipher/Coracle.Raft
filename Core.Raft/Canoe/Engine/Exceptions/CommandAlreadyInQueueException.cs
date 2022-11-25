@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Runtime.Serialization;
 
-namespace Core.Raft.Canoe.Engine.States.LeaderState
+namespace Core.Raft.Canoe.Engine.Exceptions
 {
     [Serializable]
     internal class CommandAlreadyInQueueException : Exception

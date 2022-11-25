@@ -1,14 +1,10 @@
 ﻿using ActivityLogger.Logging;
 using Core.Raft.Canoe.Engine.Actions.Contexts;
 using Core.Raft.Canoe.Engine.ActivityLogger;
-using Core.Raft.Canoe.Engine.Configuration;
 using Core.Raft.Canoe.Engine.Configuration.Cluster;
 using Core.Raft.Canoe.Engine.Logs;
-using Core.Raft.Canoe.Engine.Node;
 using Core.Raft.Canoe.Engine.Remoting.RPC;
 using Core.Raft.Canoe.Engine.States;
-using EventGuidance.Dependency;
-using EventGuidance.Responsibilities;
 using EventGuidance.Structure;
 using System;
 using System.Linq;
@@ -28,7 +24,7 @@ namespace Core.Raft.Canoe.Engine.Actions
     /// <summary>
     /// If we receive this, then surely there exists an External Leader Server. 
     /// </summary>
-    internal class OnExternalAppendEntriesRPCReceive : EventAction<OnExternalRPCReceiveContext<AppendEntriesRPC>, AppendEntriesRPCResponse>
+    internal sealed class OnExternalAppendEntriesRPCReceive : EventAction<OnExternalRPCReceiveContext<AppendEntriesRPC>, AppendEntriesRPCResponse>
     {
         #region Constants
 
@@ -273,6 +269,17 @@ namespace Core.Raft.Canoe.Engine.Actions
             /// <seealso cref="Section 5.3 Log Replication"/>
             /// </remarks>
             await Input.PersistentState.LogEntries.AppendEntriesWithOverwrite(Input.Request.Entries);
+
+            var configurationLogEntry = Input.Request.Entries.Where(x => x.IsConfiguration).LastOrDefault();
+
+            if (configurationLogEntry != null)
+            {
+                Input.ClusterConfigurationChanger.ApplyConfiguration(new ClusterMembershipChange
+                {
+                    Configuration = await Input.PersistentState.LogEntries.ReadFrom(configurationLogEntry: configurationLogEntry),
+                    ConfigurationLogEntryIndex = configurationLogEntry.CurrentIndex
+                }); 
+            }
 
             if (Input.Request.LeaderCommitIndex > Input.State.VolatileState.CommitIndex && Input.Request.Entries.Any()) 
             {

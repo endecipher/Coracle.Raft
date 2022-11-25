@@ -1,8 +1,6 @@
 ﻿using Core.Raft.Canoe.Engine.Configuration.Cluster;
-using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace Core.Raft.Canoe.Engine.Configuration
 {
@@ -20,52 +18,34 @@ namespace Core.Raft.Canoe.Engine.Configuration
     /// </summary>
     public interface IClusterConfiguration
     {
-        public ConcurrentDictionary<string, INodeConfiguration> Peers { get; }
+        /// <summary>
+        /// Collection of Peer nodes which are part of the cluster
+        /// </summary>
+        IEnumerable<INodeConfiguration> Peers { get; }
 
-        public INodeConfiguration ThisNode { get; }
+        /// <summary>
+        /// If <see cref="ThisNode"/> is null, then we can assume, that the current node is not part of the Cluster Configuration.
+        /// </summary>
+        INodeConfiguration ThisNode { get; }
+
+        /// <summary>
+        /// Checks if <see cref="ThisNode"/> is not null, internally
+        /// </summary>
+        bool IsThisNodePartOfCluster { get; }
 
         void UpdateConfiguration(string thisNodeId, IEnumerable<INodeConfiguration> allNodes);
-    }
 
-    internal sealed class ClusterConfiguration : IClusterConfiguration
-    {
-        private object _lock = new object();
+        /// <summary>
+        /// Gets Current List of Node Configurations
+        /// </summary>
+        IEnumerable<INodeConfiguration> CurrentConfiguration { get; }
 
-        public ClusterConfiguration()
-        {
-        }
-
-        public ConcurrentDictionary<string, INodeConfiguration> Peers { get; private set; }
-
-        public INodeConfiguration ThisNode { get; private set; }
-
-        public void UpdateConfiguration(string thisNodeId, IEnumerable<INodeConfiguration> allNodes)
-        {
-            var map = new ConcurrentDictionary<string, INodeConfiguration>();
-            INodeConfiguration thisNode = null;
-
-            foreach (var node in allNodes)
-            {
-                if (node.UniqueNodeId != thisNodeId)
-                {
-                    map.TryAdd(node.UniqueNodeId, node);
-                }
-                else
-                {
-                    thisNode = node;
-                }
-            }
-
-            if (thisNode == null)
-            {
-                throw new InvalidOperationException($"{thisNodeId} not found in Cluster Configuration");
-            }
-
-            lock (_lock)
-            {
-                Peers = map;
-                ThisNode = thisNode;
-            }
-        }
+        /// <summary>
+        /// Get the <see cref="INodeConfiguration"/> for a given node (peer). 
+        /// Returns null, if not found
+        /// </summary>
+        /// <param name="nodeId">External Server Id</param>
+        /// <returns></returns>
+        INodeConfiguration GetPeerNodeConfiguration(string nodeId);
     }
 }

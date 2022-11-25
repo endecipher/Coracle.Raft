@@ -1,7 +1,7 @@
 ﻿using Core.Raft.Canoe.Engine.Remoting.RPC;
 using System;
 
-namespace Core.Raft.Canoe.Engine.Remoting
+namespace Core.Raft.Canoe.Engine.Operational
 {
     /// <summary>
     /// Instances of this class will hold the Resultant operations of any Remote Procedure Call Execution.

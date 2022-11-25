@@ -2,6 +2,7 @@
 using Core.Raft.Canoe.Engine.ActivityLogger;
 using Core.Raft.Canoe.Engine.Configuration;
 using Core.Raft.Canoe.Engine.Configuration.Cluster;
+using Core.Raft.Canoe.Engine.Remoting;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -71,5 +72,6 @@ namespace Core.Raft.Canoe.Engine.Discovery
 
         public abstract Task<IDiscoveryOperation> EnrollThisNode(Uri registrarUri, INodeConfiguration configuration, CancellationToken cancellationToken);
         public abstract Task<IDiscoveryOperation> GetAllNodes(Uri registrarUri, CancellationToken cancellationToken);
+        public abstract Task<IDiscoveryOperation> NotifyCurrentNodeAsLeader(Uri registrarUri, INodeConfiguration configuration, CancellationToken cancellationToken);
     }
 }

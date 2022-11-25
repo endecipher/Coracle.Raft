@@ -1,14 +1,9 @@
 ﻿using ActivityLogger.Logging;
 using Core.Raft.Canoe.Engine.Actions.Contexts;
 using Core.Raft.Canoe.Engine.ActivityLogger;
-using Core.Raft.Canoe.Engine.Configuration;
 using Core.Raft.Canoe.Engine.Configuration.Cluster;
-using Core.Raft.Canoe.Engine.Helper;
-using Core.Raft.Canoe.Engine.Remoting;
 using Core.Raft.Canoe.Engine.Remoting.RPC;
 using Core.Raft.Canoe.Engine.States;
-using Core.Raft.Canoe.Engine.States.LeaderState;
-using EventGuidance.Dependency;
 using EventGuidance.Structure;
 using System;
 using System.Linq;
@@ -25,7 +20,7 @@ namespace Core.Raft.Canoe.Engine.Actions
     /// 
     /// AppendEntriesRPC with LogEntries.Count > 0 to be sent to one single external node; only invoked from the leader.
     /// </summary>
-    internal class OnSendAppendEntriesRPCLogs : EventAction<OnSendAppendEntriesRPCLogsContext, IAppendEntriesRPCResponse>
+    internal sealed class OnSendAppendEntriesRPCLogs : EventAction<OnSendAppendEntriesRPCLogsContext, IAppendEntriesRPCResponse>
     {
         #region Constants
 
@@ -46,20 +41,17 @@ namespace Core.Raft.Canoe.Engine.Actions
 
         public override string UniqueName => ActionName;
 
-        public OnSendAppendEntriesRPCLogs(INodeConfiguration input, AppendEntriesSession session, IChangingState state, OnSendAppendEntriesRPCContextDependencies actionDependencies, IActivityLogger activityLogger = null) 
-            : base(
-                new OnSendAppendEntriesRPCLogsContext(state, actionDependencies)
-                { 
-                    NodeConfiguration = input 
-                }, activityLogger)
+        public OnSendAppendEntriesRPCLogs(INodeConfiguration input, IChangingState state, OnSendAppendEntriesRPCContextDependencies actionDependencies, IActivityLogger activityLogger = null) 
+            : base(new OnSendAppendEntriesRPCLogsContext(state, actionDependencies), activityLogger)
         {
+            Input.NodeConfiguration = input;
             Input.InvocationTime = DateTimeOffset.Now;
-            Input.Session = session;
         }
 
         protected override async Task<bool> ShouldProceed()
         {
-            if (!Input.IsContextValid)
+            // To check if state has not been abandoned, or the AppendEntries Configuration has not been changed, and that the sendee is still a CurrentNode of the Peers
+            if (!Input.IsContextValid || !(Input.State as Leader).AppendEntriesManager.CanSendTowards(Input.NodeConfiguration.UniqueNodeId))
             {
                 return false;
             }
@@ -67,22 +59,43 @@ namespace Core.Raft.Canoe.Engine.Actions
             Input.NextIndex = (Input.State as Leader).LeaderProperties.GetNextIndex(Input.NodeConfiguration.UniqueNodeId);
             Input.LastLogIndex = await Input.PersistentState.LogEntries.GetLastIndex();
 
-
-
-            if (Input.NextIndex <= Input.LastLogIndex && (Input.State as Leader).AppendEntriesMonitor.CanContinue(Input)) 
-            {
-                return true;
-            }
-
-            return false;
+            return true;
         }
 
         protected override async Task<IAppendEntriesRPCResponse> Action(CancellationToken cancellationToken)
         {
-            var currentTerm = await Input.PersistentState.GetCurrentTerm(); 
-            var logEntriesToSend = await Input.PersistentState.LogEntries.FetchLogEntriesBetween(Input.NextIndex, Input.LastLogIndex);
-            var previousLogEntry = await Input.PersistentState.LogEntries.TryGetValueAtIndex(logEntriesToSend.First().CurrentIndex - 1);
+            var currentTerm = await Input.PersistentState.GetCurrentTerm();
 
+            AppendEntriesRPC callObject;
+
+            if (Input.IsHeartbeat)
+            {
+                var lastLogEntry = await Input.PersistentState.LogEntries.TryGetValueAtLastIndex();
+
+                callObject = new AppendEntriesRPC(entries: default)
+                {
+                    Term = currentTerm,
+                    LeaderCommitIndex = Input.State.VolatileState.CommitIndex,
+                    LeaderId = Input.EngineConfiguration.NodeId, //Since current node is leader, and attempting to send outbound AppendEntries RPC
+                    PreviousLogIndex = lastLogEntry.CurrentIndex,
+                    PreviousLogTerm = lastLogEntry.Term,
+                };
+            }
+            else
+            {
+                var logEntriesToSend = await Input.PersistentState.LogEntries.FetchLogEntriesBetween(Input.NextIndex, Input.LastLogIndex);
+                var previousLogEntry = await Input.PersistentState.LogEntries.TryGetValueAtIndex(logEntriesToSend.First().CurrentIndex - 1);
+
+                callObject = new AppendEntriesRPC(entries: logEntriesToSend)
+                {
+                    Term = currentTerm,
+                    LeaderCommitIndex = Input.State.VolatileState.CommitIndex,
+                    LeaderId = Input.EngineConfiguration.NodeId,
+                    PreviousLogIndex = previousLogEntry.CurrentIndex,
+                    PreviousLogTerm = previousLogEntry.Term,
+
+                };
+            }
             /// <remarks>
             /// The leader keeps track of the highest index it knows to be committed, and it includes that index in future AppendEntries RPCs 
             /// (including heartbeats) so that the other servers eventually find out. 
@@ -106,15 +119,6 @@ namespace Core.Raft.Canoe.Engine.Actions
             /// own log up through the new entries.
             /// <seealso cref="Section 5.3 Log Replication"/>
             /// </remarks>
-            var callObject = new AppendEntriesRPC(entries: logEntriesToSend)
-            {
-                Term = currentTerm,
-                LeaderCommitIndex = Input.State.VolatileState.CommitIndex,
-                LeaderId = Input.ClusterConfiguration.ThisNode.UniqueNodeId,
-                PreviousLogIndex = previousLogEntry.CurrentIndex,
-                PreviousLogTerm = previousLogEntry.Term,
-
-            };
 
             ActivityLogger?.Log(new CoracleActivity
             {
@@ -125,7 +129,6 @@ namespace Core.Raft.Canoe.Engine.Actions
 
             }
             .With(ActivityParam.New(CallObject, callObject))
-            .With(ActivityParam.New(SessionId, Input.Session.UniqueSessionId))
             .WithCallerInfo());
 
             var result = await Input.RemoteManager.Send
@@ -144,15 +147,12 @@ namespace Core.Raft.Canoe.Engine.Actions
 
             }
             .With(ActivityParam.New(ResponseObject, result))
-            .With(ActivityParam.New(SessionId, Input.Session.UniqueSessionId))
             .WithCallerInfo());
 
-            if (!result.HasResponse)
-            {
-                var action = new OnSendAppendEntriesRPCLogs(Input.NodeConfiguration, Input.Session, Input.State, Input.Dependencies, ActivityLogger);
-                action.SupportCancellation();
-                action.CancellationManager.Bind(cancellationToken);
+            Leader leader = (Input.State as Leader);
 
+            if (!result.HasResponse) //If some exception ocurred
+            {
                 ActivityLogger?.Log(new CoracleActivity
                 {
                     Description = $"Queuing to SendAppendEntriesRPCLogs on exception response {result.Exception}",
@@ -162,23 +162,33 @@ namespace Core.Raft.Canoe.Engine.Actions
 
                 }
                 .With(ActivityParam.New(ResponseObject, result))
-                .With(ActivityParam.New(SessionId, Input.Session.UniqueSessionId))
                 .WithCallerInfo());
 
-                Input.Responsibilities.QueueEventAction(action: action, executeSeparately: false);
+                /// <remarks>
+                /// If a follower or candidate crashes, then future RequestVote and AppendEntries RPCs sent to it will fail.
+                /// Raft handles these failures by retrying indefinitely; if the crashed server restarts, then the RPC will complete
+                /// successfully. If a server crashes after completing an RPC but before responding, then it will receive the same RPC
+                /// again after it restarts. 
+                /// 
+                /// Raft RPCs are idempotent, so this causes no harm.
+                /// For example, if a follower receives an AppendEntries request that includes log entries already present in its log, it ignores those entries in the new request.
+                /// <seealso cref="Section 5.5 Follower and Candidate Crashes"/>
+                /// </remarks
+
+                //To be retried
+                leader.AppendEntriesManager.IssueRetry(Input.NodeConfiguration.UniqueNodeId);
             }
             else if (result.Response.Success)
             {
-                (Input.State as Leader).LeaderProperties.UpdateMatchIndex(Input.NodeConfiguration.UniqueNodeId, maxIndexReplicated: logEntriesToSend.Last().CurrentIndex);
-                (Input.State as Leader).LeaderProperties.UpdateNextIndex(Input.NodeConfiguration.UniqueNodeId, maxIndexReplicated: logEntriesToSend.Last().CurrentIndex);
-                (Input.State as Leader).AppendEntriesMonitor.UpdateFor(Input.Session, Input.NodeConfiguration.UniqueNodeId);
+                leader.LeaderProperties.UpdateMatchIndex(Input.NodeConfiguration.UniqueNodeId, maxIndexReplicated: Input.LastLogIndex);
+                leader.LeaderProperties.UpdateNextIndex(Input.NodeConfiguration.UniqueNodeId, maxIndexReplicated: Input.LastLogIndex);
+                leader.AppendEntriesManager.UpdateFor(Input.NodeConfiguration.UniqueNodeId);
 
-                await (Input.State as Leader).CheckIfCommitIndexNeedsUpdatation(Input.Session, Input.NodeConfiguration.UniqueNodeId);
-                //await Input.State.ParallelSessionManager.RegisterSuccessResponseIfValid(Input.SessionGuid, Input.NodeConfiguration.UniqueNodeId);
+                await leader.CheckIfCommitIndexNeedsUpdatation(Input.NodeConfiguration.UniqueNodeId);
             }
-            else 
+            else  //If Response is not null, but not successful (Denied perhaps?)
             {
-                (Input.State as Leader).AppendEntriesMonitor.UpdateFor(Input.Session, Input.NodeConfiguration.UniqueNodeId, success: false);
+                
 
                 /// <remarks>
                 /// 
@@ -213,7 +223,7 @@ namespace Core.Raft.Canoe.Engine.Actions
                 /// 
                 /// For retry we have to update the NextIndex to a lower value so as to send more logs to the follower who responded false.
                 /// </remarks>
-                await (Input.State as Leader).LeaderProperties.DecrementNextIndex(Input.NodeConfiguration.UniqueNodeId, result.Response.ConflictingEntryTermOnFailure, result.Response.FirstIndexOfConflictingEntryTermOnFailure);
+                await leader.LeaderProperties.DecrementNextIndex(Input.NodeConfiguration.UniqueNodeId, result.Response.ConflictingEntryTermOnFailure, result.Response.FirstIndexOfConflictingEntryTermOnFailure);
 
                 ActivityLogger?.Log(new CoracleActivity
                 {
@@ -224,38 +234,42 @@ namespace Core.Raft.Canoe.Engine.Actions
 
                 }
                 .With(ActivityParam.New(ResponseObject, result))
-                .With(ActivityParam.New(SessionId, Input.Session.UniqueSessionId))
                 .WithCallerInfo());
 
                 /// <remarks>
                 /// Queueing Event Action during State change should automatically cancel since Internal Token would have already canceled on State Change
                 /// </remarks>
-                Input.Responsibilities.QueueEventAction(this, executeSeparately: true);
+                leader.AppendEntriesManager.IssueRetry(Input.NodeConfiguration.UniqueNodeId);
             }
 
             return result.Response;
         }
 
+        /// <remarks>
+        /// If a follower or candidate crashes, then future RequestVote and AppendEntries RPCs sent to it will
+        /// fail.Raft handles these failures by retrying indefinitely; if the crashed server restarts, then the RPC will complete
+        /// successfully.If a server crashes after completing an RPC but before responding, then it will receive the same RPC
+        /// again after it restarts.Raft RPCs are idempotent, so this causes no harm.For example, if a follower receives an
+        /// AppendEntries request that includes log entries already present in its log, it ignores those entries in the new request
+        /// <seealso cref="Section 5.5 Follower and candidate crashes"/>
+        /// </remarks>
         protected override Task OnTimeOut()
         {
-            lock (Input)
-            {
-                Input.CurrentRetryCounter++;
-            }
-            //Interlocked.Increment(ref Input.CurrentRetryCounter);
+            (Input.State as Leader).AppendEntriesManager.IssueRetry(Input.NodeConfiguration.UniqueNodeId);
 
-            //TODO: TimeCalculator for tracking and calculating times
+            return Task.CompletedTask;
+        }
 
+        protected override Task OnFailure()
+        {
+            (Input.State as Leader).AppendEntriesManager.IssueRetry(Input.NodeConfiguration.UniqueNodeId);
 
-            /// <remarks>
-            /// If a follower or candidate crashes, then future RequestVote and AppendEntries RPCs sent to it will
-            /// fail.Raft handles these failures by retrying indefinitely; if the crashed server restarts, then the RPC will complete
-            /// successfully.If a server crashes after completing an RPC but before responding, then it will receive the same RPC
-            /// again after it restarts.Raft RPCs are idempotent, so this causes no harm.For example, if a follower receives an
-            /// AppendEntries request that includes log entries already present in its log, it ignores those entries in the new request
-            /// <seealso cref="Section 5.5 Follower and candidate crashes"/>
-            /// </remarks>
-            Input.Responsibilities.QueueEventAction(this, executeSeparately: true);
+            return Task.CompletedTask;
+        }
+
+        protected override Task OnCancellation()
+        {
+            (Input.State as Leader).AppendEntriesManager.IssueRetry(Input.NodeConfiguration.UniqueNodeId);
 
             return Task.CompletedTask;
         }

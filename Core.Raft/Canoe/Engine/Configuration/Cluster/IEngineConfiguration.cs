@@ -65,6 +65,9 @@ namespace Core.Raft.Canoe.Engine.Configuration.Cluster
         public int SendAppendEntriesRPC_MaxSessionCapacity { get; }
 
         public bool IncludeOriginalClientCommandInResults { get; }
+        public bool IncludeOriginalConfigurationInResults { get; }
+        public bool IncludeJointConsensusConfigurationInResults { get; }
+        public bool IncludeConfigurationChangeRequestInResults { get; }
 
         #endregion
 
@@ -109,6 +112,11 @@ namespace Core.Raft.Canoe.Engine.Configuration.Cluster
         public int AppendEntriesTimeoutOnReceive_InMilliseconds { get; }
 
         /// <summary>
+        /// Determines how aggressively should the system check when the newly nodes added are caught up with the leader or not
+        /// </summary>
+        public int CatchupIntervalOnConfigurationChange_InMilliseconds { get; }
+
+        /// <summary>
         /// Processing Timeout In Milliseconds when received an external Request Vote RPC
         /// </summary>
         public int RequestVoteTimeoutOnReceive_InMilliseconds { get; }
@@ -123,6 +131,41 @@ namespace Core.Raft.Canoe.Engine.Configuration.Cluster
         /// </summary>
         public int AppendEntriesTimeoutOnSend_InMilliseconds { get; }
         public Uri ThisNodeUri { get; }
+
+        /// <summary>
+        /// This determines how long to wait for an entry to be committed, i.e successful replication across a majority of clusters, 
+        /// so that the leader can commit the log entry.
+        /// 
+        /// It can be equal to the ElectionTimeout only, since we can wait until that long.
+        /// </summary>
+        public int EntryCommitWaitTimeout_InMilliseconds { get; }
+
+        /// <summary>
+        /// This determines how aggressively to check for an entry to be committed, i.e successful replication across a majority of clusters, 
+        /// so that the leader can commit the log entry.
+        /// 
+        /// It can be a small fraction of the Heartbeat timeout, or ideally - the amount of time o send and receive an RPC in average.
+        /// Consider an average network call time.
+        /// </summary>
+        public int EntryCommitWaitInterval_InMilliseconds { get; }
+
+        /// <summary>
+        /// The catchup of NewNodes may take a long time, since they have newly joined.
+        /// If InstallSnapshotRPC is not configured, the traditional AppendEntries RPC may take a longer while.
+        /// For the worst case, we can keep it as a very large value
+        /// </summary>
+        public int CatchUpOfNewNodesTimeout_InMilliseconds { get; }
+
+        /// <summary>
+        /// Determines how aggressively to check if the New Nodes are caught up or not.
+        /// 
+        /// The catchup of NewNodes may take a long time, since they have newly joined.
+        /// If InstallSnapshotRPC is not configured, the traditional AppendEntries RPC may take a longer while.
+        /// 
+        /// We can keep it as the same time as Heartbeat Interval for now.
+        /// </summary>
+        public int CatchUpOfNewNodesWaitInterval_InMilliseconds { get; }
+        int CheckDepositionWaitInterval_InMilliseconds { get; }
 
         #endregion
     }

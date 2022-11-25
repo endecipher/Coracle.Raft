@@ -313,7 +313,7 @@ namespace Coracle.IntegrationTests.Framework
 
             Context
                 .GetService<IClusterConfiguration>()
-                .Peers.Count
+                .Peers.Count()
                 .Should().Be(0, "- no external nodes have been enrolled yet apart from this node");
 
             Context
@@ -374,13 +374,14 @@ namespace Coracle.IntegrationTests.Framework
 
             Context
                 .GetService<IClusterConfiguration>()
-                .Peers.Count
+                .Peers.Count()
                 .Should().Be(2, "- 2 Mock Nodes have been enrolled apart from this node");
 
             Context
                 .GetService<IClusterConfiguration>()
                 .Peers
-                .Should().ContainKeys(new string[] { MockNodeIdA, MockNodeIdB }, "- 2 Mock Nodes have been enrolled apart from this node");
+                .Select(x => x.UniqueNodeId)
+                .Should().Contain(expected: new string[] { MockNodeIdA, MockNodeIdB }, because: "- 2 Mock Nodes have been enrolled apart from this node");
 
             Context
                 .GetService<IClusterConfiguration>()

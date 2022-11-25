@@ -4,12 +4,8 @@ using Core.Raft.Canoe.Engine.Actions.Awaiters;
 using Core.Raft.Canoe.Engine.Command;
 using Core.Raft.Canoe.Engine.Configuration;
 using Core.Raft.Canoe.Engine.Configuration.Cluster;
-using Core.Raft.Canoe.Engine.Exceptions;
-using Core.Raft.Canoe.Engine.Node;
-using Core.Raft.Canoe.Engine.Remoting;
 using Core.Raft.Canoe.Engine.States;
-using EventGuidance.Dependency;
-using EventGuidance.Logging;
+using Core.Raft.Canoe.Engine.States.LeaderState;
 using EventGuidance.Responsibilities;
 using System;
 using System.Threading;
@@ -24,38 +20,35 @@ namespace Core.Raft.Canoe.Engine.ClientHandling
     {
         public ExternalClientCommandHandler(
             IClientRequestHandler clientRequestHandler, 
-            IRemoteManager remoteManager, 
-            IResponsibilities responsibilities,
             IEngineConfiguration engineConfiguration,
             ILeaderNodePronouncer leaderNodePronouncer,
             ICurrentStateAccessor currentStateAccessor,
-            IClusterConfiguration clusterConfiguration,
+            IResponsibilities responsibilities,
             IGlobalAwaiter globalAwaiter,
             IPersistentProperties persistentState,
-            IActivityLogger activityLogger)
+            IActivityLogger activityLogger,
+            IAppendEntriesManager appendEntriesManager)
         {
             RequestHandler = clientRequestHandler;
-            RemoteManager = remoteManager;
-            Responsibilities = responsibilities;
             EngineConfiguration = engineConfiguration;
             LeaderNodePronouncer = leaderNodePronouncer;
-            ClusterConfiguration = clusterConfiguration;
             GlobalAwaiter = globalAwaiter;
             PersistentState = persistentState;
             ActivityLogger = activityLogger;
+            AppendEntriesManager = appendEntriesManager;
             CurrentStateAccessor = currentStateAccessor;
+            Responsibilities = responsibilities;
         }
 
         IClientRequestHandler RequestHandler { get; }
-        IRemoteManager RemoteManager { get; }
-        IResponsibilities Responsibilities { get; }
         IEngineConfiguration EngineConfiguration { get; }
         ILeaderNodePronouncer LeaderNodePronouncer { get; }
-        IClusterConfiguration ClusterConfiguration { get; }
         IGlobalAwaiter GlobalAwaiter { get; }
         IPersistentProperties PersistentState { get; }
         IActivityLogger ActivityLogger { get; }
+        IAppendEntriesManager AppendEntriesManager { get; }
         ICurrentStateAccessor CurrentStateAccessor { get; }
+        IResponsibilities Responsibilities { get; }
 
         public async Task<ClientHandlingResult> HandleClientCommand<TCommand>(TCommand Command, CancellationToken cancellationToken) where TCommand : class, ICommand
         {
@@ -80,11 +73,9 @@ namespace Core.Raft.Canoe.Engine.ClientHandling
                 EngineConfiguration = EngineConfiguration,
                 ClientRequestHandler = RequestHandler,
                 LeaderNodePronouncer = LeaderNodePronouncer,
-                ClusterConfiguration = ClusterConfiguration,
                 GlobalAwaiter = GlobalAwaiter,
                 PersistentState = PersistentState,
-                Responsibilities = Responsibilities,
-                RemoteManager = RemoteManager
+                AppendEntriesManager = AppendEntriesManager
             }, ActivityLogger);
             
             action.SupportCancellation();
@@ -108,11 +99,6 @@ namespace Core.Raft.Canoe.Engine.ClientHandling
                     Exception = e,
                     LeaderNodeConfiguration = LeaderNodePronouncer.RecognizedLeaderConfiguration
                 };
-            }
-
-            if (result.Exception != null && result.Exception is ClientCommandDeniedException)
-            {
-                return await RemoteManager.ForwardToLeader<TCommand>(Command, result.LeaderNodeConfiguration, cancellationToken);
             }
 
             return result;
