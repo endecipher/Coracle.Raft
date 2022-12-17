@@ -45,9 +45,10 @@ namespace Core.Raft.Canoe.Dependencies
     /// <item><see cref = "IExternalRpcHandler" /> - For handling inbound RPC calls from other Coracle nodes</item>
     /// <item><see cref = "ICurrentStateAccessor" /> - For holding the Current State used by the entire application</item>
     /// <item><see cref = "IClusterConfigurationChanger" /> - For changing the internal <see cref="IClusterConfiguration"/> during <see cref="IExternalConfigurationChangeHandler.IssueConfigurationChange(ConfigurationChangeRPC, System.Threading.CancellationToken)"/></item>
-    /// <item><see cref = "IAppendEntriesManager" /> - For centrally managing outbound AppendEntriesRPC during <see cref="Leader"/> state</item>
+    /// <item><see cref = "IAppendEntriesManager" /> - Initialized for centrally managing outbound AppendEntriesRPC during <see cref="Leader"/> state</item>
     /// <item><see cref = "IElectionManager" /> - For centrally managing outbound RequestVoteRPC during <see cref="Candidate"/> state</item>
     /// <item><see cref = "IExternalConfigurationChangeHandler" /> - For handling inbound RPC calls issued for configuration change</item>
+    /// <item><see cref = "ILeaderVolatileProperties" /> - Initialized for handling NextIndex and MatchIndex during <see cref="Leader"/> state</item>
     /// </list>
     /// 
     /// </summary>
@@ -71,6 +72,7 @@ namespace Core.Raft.Canoe.Dependencies
             container.RegisterSingleton<IAppendEntriesManager, AppendEntriesManager>();
             container.RegisterSingleton<IElectionManager, ElectionManager>();
             container.RegisterTransient<IExternalConfigurationChangeHandler, ExternalConfigurationChangeHandler>();
+            container.RegisterSingleton<ILeaderVolatileProperties, LeaderVolatileProperties>();
         }
     }
 }

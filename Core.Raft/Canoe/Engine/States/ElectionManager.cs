@@ -15,22 +15,6 @@ using System.Threading.Tasks;
 
 namespace Core.Raft.Canoe.Engine.States
 {
-    /// <remarks>
-    /// A candidate wins an election if it receives votes from a majority of the servers in the full cluster for the same term.
-    /// Each server will vote for at most one candidate in a given term, on a first - come - first - served basis.
-    /// The majority rule ensures that at most one candidate can win the election for a particular term
-    /// <see cref="Section 5.2 Leader Election"/>
-    /// </remarks>
-    internal interface IElectionManager : IHandleConfigurationChange
-    {
-        long CurrentTerm { get; }
-        void Initiate(long term);
-        bool CanSendTowards(string uniqueNodeId, long term);
-        void IssueRetry(string uniqueNodeId);
-        void UpdateFor(long term, string uniqueNodeId, bool voteGranted);
-        void CancelSessionIfExists();
-    }
-
     internal sealed class ElectionManager : IElectionManager
     {
         #region Constants
@@ -59,10 +43,11 @@ namespace Core.Raft.Canoe.Engine.States
         object _termLock = new object();
         public long? CurrentTerm { get; private set; }
         CancellationTokenSource VotingTokenSource { get; set; }
-        ConcurrentDictionary<string, (INodeConfiguration NodeConfiguration, Information Information)> CurrentPeers { get; set; }
+        ConcurrentDictionary<string, NodeDetails> CurrentPeers { get; set; }
 
-        internal struct Information
+        internal class NodeDetails
         {
+            public INodeConfiguration NodeConfiguration { get; init; }
             public bool VoteGranted { get; set; }
             public DateTimeOffset LastPinged { get; set; }
         }
@@ -122,14 +107,19 @@ namespace Core.Raft.Canoe.Engine.States
 
             lock (_termLock)
             {
-                CurrentPeers = new ConcurrentDictionary<string, (INodeConfiguration NodeConfiguration, Information Information)>();
+                CurrentPeers = new ConcurrentDictionary<string, NodeDetails>();
                 
                 foreach (var config in ClusterConfiguration.Peers)
                 {
-                    CurrentPeers.TryAdd(config.UniqueNodeId, (config, new Information { LastPinged = DateTimeOffset.UnixEpoch, VoteGranted = false }));
+                    CurrentPeers.TryAdd(config.UniqueNodeId, new NodeDetails 
+                    { 
+                        NodeConfiguration = config, 
+                        LastPinged = DateTimeOffset.UnixEpoch, 
+                        VoteGranted = false  
+                    });
                 }
                 
-                CurrentTerm = default;
+                CurrentTerm = term;
             }
 
             /// <summary>
@@ -175,7 +165,7 @@ namespace Core.Raft.Canoe.Engine.States
 
         private bool HasMajorityAttained(string externalServerId)
         {
-            var validVotes = CurrentPeers.Values.Select(x => x.Information).Where(x => x.VoteGranted).Count();
+            var validVotes = CurrentPeers.Values.Where(x => x.VoteGranted).Count();
 
             // In almost all cases, the Candidate will vote for itself first, and then start the Election.
             // However, if the Cluster Configuration changes in such a case, and the current node is no longer part of the cluster,
@@ -215,7 +205,7 @@ namespace Core.Raft.Canoe.Engine.States
 
                     var state = CurrentStateAccessor.Get();
 
-                    if (state.StateValue.IsCandidate() && !state.IsDisposed)
+                    if (state.StateValue.IsCandidate() && !state.IsDisposed && !VotingTokenSource.IsCancellationRequested)
                         CurrentStateAccessor.Get().StateChanger.AbandonStateAndConvertTo<Leader>(nameof(Leader));
                 }
 
@@ -242,7 +232,8 @@ namespace Core.Raft.Canoe.Engine.States
                 return;
             }
 
-            nodeDetails.Information.LastPinged = DateTimeOffset.UtcNow;
+            nodeDetails.LastPinged = DateTime.UtcNow;
+                //.Information.LastPinged = DateTimeOffset.UtcNow;
 
             if (!term.Equals(CurrentTerm))
             {
@@ -278,7 +269,7 @@ namespace Core.Raft.Canoe.Engine.States
                 return;
             }
 
-            bool isVoteAlreadyGranted = nodeDetails.Information.VoteGranted;
+            bool isVoteAlreadyGranted = nodeDetails.VoteGranted;
 
             if (isVoteAlreadyGranted)
             {
@@ -294,6 +285,8 @@ namespace Core.Raft.Canoe.Engine.States
 
                 return;
             }
+
+            nodeDetails.VoteGranted = voteGranted; // Vote Granted is true, thus we update the findings and check for Majority
 
             ActivityLogger?.Log(new CoracleActivity
             {
@@ -340,7 +333,7 @@ namespace Core.Raft.Canoe.Engine.States
 
             lock (_termLock)
             {
-                CurrentPeers = new ConcurrentDictionary<string, (INodeConfiguration NodeConfiguration, Information Information)>();
+                CurrentPeers = new ConcurrentDictionary<string, NodeDetails>();
 
                 CurrentTerm = default;
             }
@@ -356,7 +349,7 @@ namespace Core.Raft.Canoe.Engine.States
         {
             if (CurrentPeers.TryGetValue(uniqueNodeId, out var nodeDetails))
             {
-                nodeDetails.Information.LastPinged = DateTimeOffset.UtcNow;
+                nodeDetails.LastPinged = DateTimeOffset.UtcNow;
 
                 new Task(() =>
                 {
@@ -392,7 +385,12 @@ namespace Core.Raft.Canoe.Engine.States
 
             foreach (var node in serverIdsWhichHaveBeenAdded)
             {
-                CurrentPeers.TryAdd(node.Key, (node.Value, new Information { LastPinged = DateTimeOffset.UnixEpoch }));
+                CurrentPeers.TryAdd(node.Key, new NodeDetails 
+                { 
+                    NodeConfiguration = node.Value, 
+                    LastPinged = DateTimeOffset.UnixEpoch, 
+                    VoteGranted = false 
+                });
             }
 
             foreach (var nodeId in serverIdsWhichHaveBeenRemoved)

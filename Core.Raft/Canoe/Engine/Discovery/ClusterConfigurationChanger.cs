@@ -27,7 +27,8 @@ namespace Core.Raft.Canoe.Engine.Configuration
             ICurrentStateAccessor currentStateAccessor,
             IGlobalAwaiter globalAwaiter,
             IResponsibilities responsibilities,
-            IActivityLogger activityLogger)
+            IActivityLogger activityLogger,
+            IEngineConfiguration engineConfiguration)
         {
             ClusterConfiguration = clusterConfiguration;
             LeaderNodePronouncer = leaderNodePronouncer;
@@ -35,6 +36,7 @@ namespace Core.Raft.Canoe.Engine.Configuration
             GlobalAwaiter = globalAwaiter;
             Responsibilities = responsibilities;
             ActivityLogger = activityLogger;
+            EngineConfiguration = engineConfiguration;
         }
 
         IClusterConfiguration ClusterConfiguration { get; }
@@ -43,6 +45,7 @@ namespace Core.Raft.Canoe.Engine.Configuration
         IGlobalAwaiter GlobalAwaiter { get; }
         IResponsibilities Responsibilities { get; }
         IActivityLogger ActivityLogger { get; }
+        public IEngineConfiguration EngineConfiguration { get; }
 
         /// <summary>
         /// Whenever a node receives a log entry (which is a <see cref="ConfigurationLogEntry"/>), they would apply it to their node immediately.
@@ -60,7 +63,7 @@ namespace Core.Raft.Canoe.Engine.Configuration
             }
             .WithCallerInfo());
 
-            string thisNodeId = ClusterConfiguration.ThisNode.UniqueNodeId;
+            string thisNodeId = EngineConfiguration.NodeId;
 
             bool isThisNodeLeader = LeaderNodePronouncer.IsLeaderRecognized && LeaderNodePronouncer.RecognizedLeaderConfiguration.UniqueNodeId.Equals(thisNodeId);
             bool isThisNodePartOfTheNewConfiguration = membershipChange.Configuration.Any(x => x.UniqueNodeId.Equals(thisNodeId));
@@ -70,7 +73,7 @@ namespace Core.Raft.Canoe.Engine.Configuration
             /// For any node who is not a part of the configuration anymore, they can drop off
 
             ClusterConfiguration.UpdateConfiguration(thisNodeId, membershipChange.Configuration);
-            (CurrentStateAccessor.Get() as IHandleConfigurationChange).HandleConfigurationChange(ClusterConfiguration.Peers);
+            (CurrentStateAccessor.Get() as IHandleConfigurationChange)?.HandleConfigurationChange(ClusterConfiguration.Peers);
 
             if (!isThisNodePartOfTheNewConfiguration)
             {

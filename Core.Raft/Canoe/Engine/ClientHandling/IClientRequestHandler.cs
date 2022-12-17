@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace Core.Raft.Canoe.Engine.ClientHandling
 {
-    /// <summary>
+    /// <remarks>
     /// If the leader
     /// crashes after committing the log entry but before responding to the client, the client will retry the command with a
     /// new leader, causing it to be executed a second time.The
@@ -14,10 +14,22 @@ namespace Core.Raft.Canoe.Engine.ClientHandling
     /// serial number processed for each client, along with the associated response. If it receives a command whose serial
     /// number has already been executed, it responds immediately without re-executing the request.
     /// 
-    /// <see cref="Section 8 Client Interaction"/>
-    /// </summary>
+    /// <seealso cref="Section 8 Client Interaction"/>
+    /// </remarks>
     public interface IClientRequestHandler
     {
+        /// <remarks>
+        /// ..so far Raft can execute a command multiple times:
+        /// 
+        /// If the leader crashes after committing the log entry but before responding to the client, the client will retry the command with a
+        /// new leader, causing it to be executed a second time. The solution is for clients to assign unique serial numbers to
+        /// every command. Then, the state machine tracks the latest serial number processed for each client, along with the associated response.
+        /// If it receives a command whose serial number has already been executed, it responds immediately without re - executing the request.
+        /// 
+        /// <seealso cref="Section 8 Client Interaction"/>
+        /// </remarks>
+        Task<bool> IsCommandLatest(string uniqueCommandId, out ClientHandlingResult executedResult);
+
         /// <summary>
         /// Extension to check if the Client Command was already executed previously and return it.
         /// </summary>

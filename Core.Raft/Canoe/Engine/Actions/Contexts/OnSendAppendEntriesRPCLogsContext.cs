@@ -28,10 +28,7 @@ namespace Core.Raft.Canoe.Engine.Actions.Contexts
         internal IChangingState State { get; set; }
         OnSendAppendEntriesRPCContextDependencies Dependencies { get; set; }
 
-
-        internal long NextIndex { get; set; }
-        internal long LastLogIndex { get; set; }
-        internal bool IsHeartbeat => NextIndex > LastLogIndex;
+        internal bool TurnToFollower { get; set; } = false;
         public bool IsContextValid => !State.IsDisposed && State.StateValue.IsLeader();
 
         #region Action Dependencies

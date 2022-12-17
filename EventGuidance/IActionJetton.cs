@@ -24,6 +24,7 @@ namespace EventGuidance.Responsibilities
         void MoveToReady();
         void MoveToStopped();
         void MoveToTimeOut();
+        void MoveToSkipped();
         void SetResultIfAny<T>(T result, Exception exception = null) where T : class;
         void Dispose();
     }

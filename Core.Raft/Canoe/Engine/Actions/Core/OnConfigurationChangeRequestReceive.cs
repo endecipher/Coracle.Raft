@@ -27,7 +27,7 @@ namespace Core.Raft.Canoe.Engine.Actions
         public const string CurrentState = nameof(CurrentState);
         public const string RetryingAsLeaderNodeNotFound = nameof(RetryingAsLeaderNodeNotFound); 
         public const string ForwardingCommandToLeader = nameof(ForwardingCommandToLeader); 
-        public const string AppendingNewEntryForNonReadOnlyCommand = nameof(AppendingNewEntryForNonReadOnlyCommand); 
+        public const string ConfigurationChangeSuccessful = nameof(ConfigurationChangeSuccessful); 
         public const string NotifyOtherNodes = nameof(NotifyOtherNodes); 
         public const string CommandApplied = nameof(CommandApplied); 
         public const string NodeId = nameof(NodeId); 
@@ -291,7 +291,7 @@ namespace Core.Raft.Canoe.Engine.Actions
             ///     If still a part, then no worries, and we proceed to update the ClusterConfiguration 
             ///     If not a part, then update ClusterConfiguration. But have a callback event raised which would decomission this leader server once the C-new is comitted across a majority-minus-Self servers (since we updated the ClusterConfiguration) server.
             /// 
-            /// As for the thrid issue (third issue impacts), whenever a decomission event is issued, immediately the EventProcessor should be cancelled to cancel all ongoing
+            /// As for the third issue (third issue impacts), whenever a decomission event is issued, immediately the EventProcessor should be cancelled to cancel all ongoing
             /// tasks, and the StateValue could be changed to Abandoned.
             /// Ideally this should happen like when we do Pause().
             /// When new servers get added, I believe they won't have the knowledge of the ClusterConfiguration, and that C-old,new and C-new entries should actually be the one to make them update their configurations.
@@ -316,9 +316,8 @@ namespace Core.Raft.Canoe.Engine.Actions
 
             ActivityLogger?.Log(new CoracleActivity
             {
-                Description = $"Current State Value is {Input.State.StateValue}. Appending New Entry..",
                 EntitySubject = ActionName,
-                Event = AppendingNewEntryForNonReadOnlyCommand,
+                Event = ConfigurationChangeSuccessful,
                 Level = ActivityLogLevel.Debug,
 
             }

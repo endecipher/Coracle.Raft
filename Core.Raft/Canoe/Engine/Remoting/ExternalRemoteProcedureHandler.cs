@@ -46,11 +46,6 @@ namespace Core.Raft.Canoe.Engine.Remoting
         public ILeaderNodePronouncer LeaderNodePronouncer { get; }
         public IClusterConfigurationChanger ClusterConfigurationChanger { get; }
 
-        public ExternalRemoteProcedureHandler()
-        {
-
-        }
-
         public Task<Operation<IAppendEntriesRPCResponse>> RespondTo(IAppendEntriesRPC externalRequest, CancellationToken cancellationToken)
         {
             Operation<IAppendEntriesRPCResponse> response = new Operation<IAppendEntriesRPCResponse>();

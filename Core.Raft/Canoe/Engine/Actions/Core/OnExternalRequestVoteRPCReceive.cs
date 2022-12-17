@@ -18,13 +18,14 @@ namespace Core.Raft.Canoe.Engine.Actions
         #region Constants
 
         public const string ActionName = nameof(OnExternalRequestVoteRPCReceive);
-        private const string DeniedDueToLesserTerm = nameof(DeniedDueToLesserTerm);
-        private const string InputData = nameof(InputData);
-        private const string DeniedSinceAlreadyVoted = nameof(DeniedSinceAlreadyVoted);
-        private const string VotedFor = nameof(VotedFor);
-        private const string DeniedDueToLogMismatch = nameof(DeniedDueToLogMismatch);
-        private const string LastLogEntryPersisted = nameof(LastLogEntryPersisted);
-        private const string DeniedByDefault = nameof(DeniedByDefault);
+        public const string DeniedDueToLesserTerm = nameof(DeniedDueToLesserTerm);
+        public const string RevertingToFollower = nameof(RevertingToFollower);
+        public const string InputData = nameof(InputData);
+        public const string DeniedSinceAlreadyVoted = nameof(DeniedSinceAlreadyVoted);
+        public const string VotedFor = nameof(VotedFor);
+        public const string DeniedDueToLogMismatch = nameof(DeniedDueToLogMismatch);
+        public const string LastLogEntryPersisted = nameof(LastLogEntryPersisted);
+        public const string DeniedByDefault = nameof(DeniedByDefault);
 
         #endregion
 
@@ -53,6 +54,31 @@ namespace Core.Raft.Canoe.Engine.Actions
                 Term = Term,
                 VoteGranted = false
             };
+
+
+            /// <remarks>
+            /// All Servers: • If RPC request or response contains term T > currentTerm: set currentTerm = T, convert to follower (§5.1)
+            /// <seealso cref="Figure 2 Rules For Servers"/>
+            /// </remarks>
+            /// 
+            if (Input.Request.Term > Term && (Input.State.StateValue.IsCandidate() || Input.State.StateValue.IsLeader()))
+            {
+                Term = Input.Request.Term;
+
+                ActivityLogger?.Log(new CoracleActivity
+                {
+                    EntitySubject = ActionName,
+                    Event = RevertingToFollower,
+                    Level = ActivityLogLevel.Debug,
+
+                }
+                .With(ActivityParam.New(InputData, Input))
+                .WithCallerInfo());
+
+                await Input.PersistentState.SetCurrentTerm(Term);
+
+                Input.TurnToFollower = true;
+            }
 
             /// <remarks>
             ///  Reply false if term < currentTerm 
@@ -137,6 +163,8 @@ namespace Core.Raft.Canoe.Engine.Actions
                 /// <see cref="Section 5.2 Leader Election"/>
                 /// </remarks>
                 await Input.PersistentState.SetVotedFor(Input.Request.CandidateId);
+
+                return response;
             }
             else
             {
@@ -165,6 +193,18 @@ namespace Core.Raft.Canoe.Engine.Actions
             .WithCallerInfo());
 
             return response;
+        }
+
+        // This is done so that NewResponsibilities can be configured AFTER we respond to this request.
+        // This is done to avoid the chances of current Task cancellation.
+        protected override Task OnEventActionEnd()
+        {
+            if (Input.TurnToFollower)
+            {
+                Input.State.StateChanger.AbandonStateAndConvertTo<Follower>(nameof(Follower));
+            }
+
+            return base.OnEventActionEnd();
         }
     }
 }

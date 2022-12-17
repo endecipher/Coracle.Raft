@@ -131,6 +131,21 @@ namespace Core.Raft.Canoe.Engine.Actions
             }
 
             /// <remarks>
+            /// ..so far Raft can execute a command multiple times:
+            /// 
+            /// If the leader crashes after committing the log entry but before responding to the client, the client will retry the command with a
+            /// new leader, causing it to be executed a second time. The solution is for clients to assign unique serial numbers to
+            /// every command. Then, the state machine tracks the latest serial number processed for each client, along with the associated response.
+            /// If it receives a command whose serial number has already been executed, it responds immediately without re - executing the request.
+            /// 
+            /// <seealso cref="Section 8 Client Interaction"/>
+            /// </remarks>
+            if (await Input.ClientRequestHandler.IsCommandLatest(Input.Command.UniqueId, out var executedCommandResult))
+            {
+                return executedCommandResult;
+            }
+
+            /// <remarks>
             /// A leader must check whether it has been deposed before processing a read-only request (its information may be stale if a more recent leader has been elected).
             /// Raft handles this by having the leader exchange heartbeat messages with a majority of the cluster before responding to read - only requests.
             /// <seealso cref="Section 8 Client Interaction"/>
@@ -198,7 +213,7 @@ namespace Core.Raft.Canoe.Engine.Actions
                 /// in Figure 3. Each log entry also has an integer index identifying its position in the log.
                 /// <seealso cref="Section 5.3 Log Replication"/>
                 /// </remarks>
-                var logEntry = await Input.PersistentState.LogEntries.AppendNewEntry<TCommand>(Input.Command);
+                var logEntry = await Input.PersistentState.LogEntries.AppendNewCommandEntry<TCommand>(Input.Command);
 
                 /// <remarks>
                 /// Each client request contains a command to be executed by the replicated state machines. 

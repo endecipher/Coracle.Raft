@@ -8,6 +8,7 @@
         Completed = 2,
         Cancelled = 4,
         TimedOut = 5,
-        Stopped = 6
+        Stopped = 6,
+        Skipped = 7
     }
 }

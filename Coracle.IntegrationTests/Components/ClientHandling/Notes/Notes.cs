@@ -69,5 +69,10 @@ namespace Coracle.IntegrationTests.Components.ClientHandling.Notes
         {
             return NoteMap.ContainsKey(note.UniqueHeader);
         }
+
+        public IEnumerable<string> GetAllHeaders()
+        {
+            return NoteMap.Keys;
+        }
     }
 }

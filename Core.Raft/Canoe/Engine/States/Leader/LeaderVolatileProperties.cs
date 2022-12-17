@@ -18,33 +18,33 @@ namespace Core.Raft.Canoe.Engine.States
     /// matchIndex[] for each server, index of highest log entry known to be replicated on server (initialized to 0, increases monotonically)
     /// <see cref="Figure 2 State"/>
     /// </summary>
-    internal class LeaderVolatileProperties : IHandleConfigurationChange, IDisposable
+    internal class LeaderVolatileProperties : ILeaderVolatileProperties
     {
         #region Constants
 
-        private const string IndexToCheck = nameof(IndexToCheck);
-        private const string TotalVotes = nameof(TotalVotes);
-        private const string TotalNodes = nameof(TotalNodes);
-        private const string MatchIndexUpdateForMajority = nameof(MatchIndexUpdateForMajority);
-        private const string LeaderVolatilePropertiesEntity = nameof(LeaderVolatileProperties);
-        private const string NodeId = nameof(NodeId);
-        private const string NewMatchIndex = nameof(NewMatchIndex);
-        private const string UpdatedMatchIndex = nameof(UpdatedMatchIndex);
-        private const string NextIndex = nameof(NextIndex);
-        private const string RetrieveNextIndex = nameof(RetrieveNextIndex);
-        private const string CurrentNextIndex = nameof(CurrentNextIndex);
-        private const string NewNextIndex = nameof(NewNextIndex);
-        private const string UpdatedNextIndexToOne = nameof(UpdatedNextIndexToOne);
-        private const string ConflictTermOfFollower = nameof(ConflictTermOfFollower);
-        private const string FirstIndexOfConflictingTerm = nameof(FirstIndexOfConflictingTerm);
-        private const string DecrementedNextIndex = nameof(DecrementedNextIndex);
-        private const string ConflictingEntryIndexTermMatchesReceivedConflictingTerm = nameof(ConflictingEntryIndexTermMatchesReceivedConflictingTerm);
-        private const string UpdatedNextIndex = nameof(UpdatedNextIndex);
-        private const string Initializing = nameof(Initializing);
-        private const string LastPersistedIndex = nameof(LastPersistedIndex);
-        private const string NewConfigurationManagement = nameof(NewConfigurationManagement);
-        private const string NodesToAdd = nameof(NodesToAdd);
-        private const string NodesToRemove = nameof(NodesToRemove);
+        public const string indexToCheck = nameof(indexToCheck);
+        public const string peerNodesWhichHaveReplicated = nameof(peerNodesWhichHaveReplicated);
+        public const string totalNodesInCluster = nameof(totalNodesInCluster);
+        public const string MatchIndexUpdateForMajority = nameof(MatchIndexUpdateForMajority);
+        public const string Entity = nameof(LeaderVolatileProperties);
+        public const string nodeId = nameof(nodeId);
+        public const string newMatchIndex = nameof(newMatchIndex);
+        public const string UpdatedIndices = nameof(UpdatedIndices);
+        public const string NextIndex = nameof(NextIndex);
+        public const string RetrieveNextIndex = nameof(RetrieveNextIndex);
+        public const string currentNextIndex = nameof(currentNextIndex);
+        public const string newNextIndex = nameof(newNextIndex);
+        public const string DecrementedNextIndexToFirstIndexOfLeaderTermCorrespondingToConflictingIndexEntry = nameof(DecrementedNextIndexToFirstIndexOfLeaderTermCorrespondingToConflictingIndexEntry);
+        public const string conflictTermOfFollower = nameof(conflictTermOfFollower);
+        public const string firstIndexOfConflictingTerm = nameof(firstIndexOfConflictingTerm);
+        public const string DecrementedNextIndex = nameof(DecrementedNextIndex);
+        public const string DecrementedNextIndexToFirstIndexOfPriorValidTerm = nameof(DecrementedNextIndexToFirstIndexOfPriorValidTerm);
+        public const string DecrementedNextIndexToFirstIndexOfConflictingTerm = nameof(DecrementedNextIndexToFirstIndexOfConflictingTerm);
+        public const string Initializing = nameof(Initializing);
+        public const string lastPersistedIndex = nameof(lastPersistedIndex);
+        public const string NewConfigurationManagement = nameof(NewConfigurationManagement);
+        public const string nodesToAdd = nameof(nodesToAdd);
+        public const string nodesToRemove = nameof(nodesToRemove);
 
         #endregion
 
@@ -52,70 +52,95 @@ namespace Core.Raft.Canoe.Engine.States
         IClusterConfiguration ClusterConfiguration { get; }
         IPersistentProperties PersistentState { get; set; }
 
-
-        internal ConcurrentDictionary<string, long> NextIndexForServers { get; set; }
-        internal ConcurrentDictionary<string, long> MatchIndexForServers { get; set; }
-
-
         public LeaderVolatileProperties(IActivityLogger activityLogger, IClusterConfiguration clusterConfiguration, IPersistentProperties persistentProperties)
         {
             ActivityLogger = activityLogger;
             ClusterConfiguration = clusterConfiguration;
             PersistentState = persistentProperties;
+        }
 
-            NextIndexForServers = new ConcurrentDictionary<string, long>();
-            MatchIndexForServers = new ConcurrentDictionary<string, long>();
+        internal ConcurrentDictionary<string, ServerIndices> Indices { get; set; }
 
+        public class ServerIndices
+        {
+            object _lock = new object();
+
+            long _nextIndex;
+            long _matchIndex;
+
+            public long NextIndex 
+            { 
+                get
+                {
+                    return _nextIndex;
+                }
+                set
+                {
+                    lock (_lock)
+                    {
+                        _nextIndex = value;
+                    }
+                }
+            }
+
+            public long MatchIndex
+            {
+                get
+                {
+                    return _matchIndex;
+                }
+                set
+                {
+                    lock (_lock)
+                    {
+                        _matchIndex = value;
+                    }
+                }
+            }
+        }
+
+        public bool TryGetNextIndex(string externalServerId, out long nextIndex)
+        {
+            bool isNodePresent = Indices.TryGetValue(externalServerId, out var indices);
+            nextIndex = indices.NextIndex;
+            return isNodePresent;
+        }
+
+        public bool TryGetMatchIndex(string externalServerId, out long matchIndex)
+        {
+            bool isNodePresent = Indices.TryGetValue(externalServerId, out var indices);
+            matchIndex = indices.MatchIndex;
+            return isNodePresent;
+        }
+
+        public void Initialize()
+        {
             var lastIndex = PersistentState.LogEntries.GetLastIndex().GetAwaiter().GetResult();
+
+            ActivityLogger?.Log(new CoracleActivity
+            {
+                EntitySubject = Entity,
+                Event = Initializing,
+                Level = ActivityLogLevel.Debug,
+
+            }
+            .With(ActivityParam.New(lastPersistedIndex, lastIndex))
+            .WithCallerInfo());
+
+            Indices = new ConcurrentDictionary<string, ServerIndices>();
 
             foreach (var peer in ClusterConfiguration.Peers)
             {
                 string externalServerId = peer.UniqueNodeId;
 
-                //TODO: Check if +1 works okay, else remove :/
-                NextIndexForServers.TryAdd(externalServerId, lastIndex + 1);
-                MatchIndexForServers.TryAdd(externalServerId, 0);
+                var initialValues = new ServerIndices 
+                { 
+                    MatchIndex = 0, 
+                    NextIndex = lastIndex + 1 
+                };
+
+                Indices.AddOrUpdate(externalServerId, initialValues, (key, val) => initialValues);
             }
-
-            ActivityLogger?.Log(new CoracleActivity
-            {
-                EntitySubject = LeaderVolatilePropertiesEntity,
-                Event = Initializing,
-                Level = ActivityLogLevel.Debug,
-
-            }
-            .With(ActivityParam.New(LastPersistedIndex, lastIndex))
-            .WithCallerInfo());
-        }
-
-        /// <summary>
-        /// Automatically updates NextIndex for Server to be maxIndexReplicated + 1
-        /// </summary>
-        /// <param name="externalServerId"></param>
-        /// <param name="maxIndexReplicated"></param>
-        public void UpdateNextIndex(string externalServerId, long? maxIndexReplicated = null)
-        {
-            //Increases Monotonically
-            if (maxIndexReplicated.HasValue && maxIndexReplicated < NextIndexForServers[externalServerId])
-            {
-                throw new InvalidOperationException($"NextIndex {maxIndexReplicated} cannot be lesser than already established {NextIndexForServers[externalServerId]}");
-            }
-
-            var lastIndex = maxIndexReplicated ?? PersistentState.LogEntries.GetLastIndex().GetAwaiter().GetResult();
-
-            NextIndexForServers[externalServerId] = lastIndex + 1;
-
-            ActivityLogger?.Log(new CoracleActivity
-            {
-                Description = $"Updated Next Index for Server {externalServerId} to {lastIndex + 1}",
-                EntitySubject = LeaderVolatilePropertiesEntity,
-                Event = UpdatedNextIndex,
-                Level = ActivityLogLevel.Debug,
-
-            }
-            .With(ActivityParam.New(NodeId, externalServerId))
-            .With(ActivityParam.New(NewNextIndex, lastIndex + 1))
-            .WithCallerInfo());
         }
 
         /// <summary>
@@ -123,195 +148,133 @@ namespace Core.Raft.Canoe.Engine.States
         /// NextIndex needs to be decremented, and more logs will be sent to bring the follower up to speed.
         /// </summary>
         /// <param name="externalServerId"></param>
-        public async Task DecrementNextIndex(string externalServerId, long? followerConflictTerm, long? followerFirstIndexOfConflictingTerm)
+        public async Task DecrementNextIndex(string externalServerId, long followerConflictTerm, long followerFirstIndexOfConflictingTerm)
         {
-            NextIndexForServers.TryGetValue(externalServerId, out var currentNextIndex);
+            if (!Indices.TryGetValue(externalServerId, out var indices))
+                return;
 
-            /// <remarks>
-            /// If called from Heartbeat
-            /// </remarks>
-            if (!followerConflictTerm.HasValue || !followerFirstIndexOfConflictingTerm.HasValue)
+            var currentNextIndex = indices.NextIndex;
+
+            async Task<long> GetValidTermPriorToConflictingTerm(long conflictingTermValue)
             {
-                NextIndexForServers.TryUpdate(externalServerId, currentNextIndex - 1, currentNextIndex);
+                var term = conflictingTermValue;
+
+                while (term > 0)
+                {
+                    bool isTermPriorAndValid = term < conflictingTermValue && await PersistentState.LogEntries.DoesTermExist(term);
+
+                    if (isTermPriorAndValid)
+                    {
+                        break;
+                    }
+                        
+                    --term;
+                }
+
+                return term;
+            }
+
+            var priorValidTerm = await GetValidTermPriorToConflictingTerm(followerConflictTerm);
+
+            // If priorValidTerm is not the same as the supplied follower conflict term, then that means either the leader must not contain any entries from the followerConflictTerm
+            // or, the follower needs a full set of entries in any which case
+            bool doesFollowerHaveInvalidTerm = !priorValidTerm.Equals(followerConflictTerm);
+
+            var firstIndexOfPriorValidTerm = await PersistentState.LogEntries.GetFirstIndexForTerm(priorValidTerm);
+            
+            if (doesFollowerHaveInvalidTerm)
+            {
+                indices.NextIndex = firstIndexOfPriorValidTerm.Value; // Index is present as the term is present and valid in Leader's logs 
 
                 ActivityLogger?.Log(new CoracleActivity
                 {
-                    Description = $"Decremented Next Index for Server {externalServerId} from {currentNextIndex} to {currentNextIndex - 1}. ConflictTerm:{followerConflictTerm} FirstIndexConflictTerm:{followerFirstIndexOfConflictingTerm}",
-                    EntitySubject = LeaderVolatilePropertiesEntity,
-                    Event = DecrementedNextIndex,
+                    EntitySubject = Entity,
+                    Event = DecrementedNextIndexToFirstIndexOfPriorValidTerm,
                     Level = ActivityLogLevel.Debug,
 
                 }
-                .With(ActivityParam.New(NodeId, externalServerId))
-                .With(ActivityParam.New(CurrentNextIndex, currentNextIndex))
-                .With(ActivityParam.New(NewNextIndex, currentNextIndex - 1))
-                .With(ActivityParam.New(ConflictTermOfFollower, followerConflictTerm))
-                .With(ActivityParam.New(FirstIndexOfConflictingTerm, followerFirstIndexOfConflictingTerm))
+                .With(ActivityParam.New(nodeId, externalServerId))
+                .With(ActivityParam.New(LeaderVolatileProperties.currentNextIndex, currentNextIndex))
+                .With(ActivityParam.New(newNextIndex, firstIndexOfPriorValidTerm.Value))
+                .With(ActivityParam.New(conflictTermOfFollower, followerConflictTerm))
+                .With(ActivityParam.New(firstIndexOfConflictingTerm, followerFirstIndexOfConflictingTerm))
                 .WithCallerInfo());
-
-                return;
             }
-
-            bool doesFollowerHaveInvalidTerm = false;
-
-            while (followerConflictTerm > 0)
+            else
             {
-                if (await PersistentState.LogEntries.DoesTermExist(followerConflictTerm.Value))
+                var leaderTermOfConflictingIndexEntry = await PersistentState.LogEntries.GetTermAtIndex(followerFirstIndexOfConflictingTerm);
+
+                // If follower doesn't have an invalid term, then we must check if the logs match up until followerFirstIndexOfConflictingTerm
+                if (leaderTermOfConflictingIndexEntry.Equals(followerConflictTerm))
                 {
-                    break;
+                    // Logs match up until the followerFirstIndexOfConflictingTerm, so we can send entries from
+                    // [followerFirstIndexOfConflictingTerm, leaderLastLogIndex] in the next AppendEntries RPC for the follower to confirm
+
+                    indices.NextIndex = followerFirstIndexOfConflictingTerm;
+
+                    ActivityLogger?.Log(new CoracleActivity
+                    {
+                        Description = $"Log[firstIndexConflictTerm{followerFirstIndexOfConflictingTerm}].Term equals follower Conflict Term {followerConflictTerm}",
+                        EntitySubject = Entity,
+                        Event = DecrementedNextIndexToFirstIndexOfConflictingTerm,
+                        Level = ActivityLogLevel.Debug,
+
+                    }
+                    .With(ActivityParam.New(nodeId, externalServerId))
+                    .With(ActivityParam.New(conflictTermOfFollower, followerConflictTerm))
+                    .With(ActivityParam.New(firstIndexOfConflictingTerm, followerFirstIndexOfConflictingTerm))
+                    .WithCallerInfo());
                 }
                 else
                 {
-                    doesFollowerHaveInvalidTerm = true;
-                    followerConflictTerm--;
-                }
-            }
+                    // Logs do not match up, thus we send all entries from the first index of the leader term for that index of the conflicting entry
 
-            if (doesFollowerHaveInvalidTerm)
-            {
-                var firstIndex = await PersistentState.LogEntries.GetFirstIndexForTerm(followerConflictTerm.Value);
+                    var firstIndexOfleaderTermOfConflictingIndexEntry = await PersistentState.LogEntries.GetFirstIndexForTerm(leaderTermOfConflictingIndexEntry);
 
-                NextIndexForServers.TryUpdate(externalServerId, firstIndex.Value, currentNextIndex);
-
-                ActivityLogger?.Log(new CoracleActivity
-                {
-                    Description = $"Decremented Next Index for Server {externalServerId} from {currentNextIndex} to {firstIndex.Value}. ConflictTerm:{followerConflictTerm} FirstIndexConflictTerm:{followerFirstIndexOfConflictingTerm}. Due to response conflict term being invalid.",
-                    EntitySubject = LeaderVolatilePropertiesEntity,
-                    Event = DecrementedNextIndex,
-                    Level = ActivityLogLevel.Debug,
-
-                }
-                .With(ActivityParam.New(NodeId, externalServerId))
-                .With(ActivityParam.New(CurrentNextIndex, currentNextIndex))
-                .With(ActivityParam.New(NewNextIndex, firstIndex.Value))
-                .With(ActivityParam.New(ConflictTermOfFollower, followerConflictTerm))
-                .With(ActivityParam.New(FirstIndexOfConflictingTerm, followerFirstIndexOfConflictingTerm))
-                .WithCallerInfo());
-
-                return;
-            }
-
-            /// <remarks>
-            /// The below checks that if the leader's log[firstIndexOfConflictingTermFromFollower] term is the same as that of the specified term,
-            /// we update to send from the 
-            /// </remarks>
-            if ((await PersistentState.LogEntries.GetTermAtIndex(followerFirstIndexOfConflictingTerm.Value)).Equals(followerConflictTerm))
-            {
-                ActivityLogger?.Log(new CoracleActivity
-                {
-                    Description = $"Log[firstIndexConflictTerm{followerFirstIndexOfConflictingTerm}].Term equals follower Conflict Term {followerConflictTerm}",
-                    EntitySubject = LeaderVolatilePropertiesEntity,
-                    Event = ConflictingEntryIndexTermMatchesReceivedConflictingTerm,
-                    Level = ActivityLogLevel.Debug,
-
-                }
-                .With(ActivityParam.New(NodeId, externalServerId))
-                .With(ActivityParam.New(ConflictTermOfFollower, followerConflictTerm))
-                .With(ActivityParam.New(FirstIndexOfConflictingTerm, followerFirstIndexOfConflictingTerm))
-                .WithCallerInfo());
-
-                var firstIndexOfConflictTerm = await PersistentState.LogEntries.GetFirstIndexForTerm(followerConflictTerm.Value);
-
-                if (firstIndexOfConflictTerm.Equals(followerFirstIndexOfConflictingTerm))
-                {
-                    NextIndexForServers.TryUpdate(externalServerId, followerFirstIndexOfConflictingTerm.Value, currentNextIndex);
+                    indices.NextIndex = firstIndexOfleaderTermOfConflictingIndexEntry.Value;
 
                     ActivityLogger?.Log(new CoracleActivity
                     {
-                        Description = $"Decremented Next Index for Server {externalServerId} from {currentNextIndex} to {followerFirstIndexOfConflictingTerm.Value}. ConflictTerm:{followerConflictTerm} FirstIndexConflictTerm:{followerFirstIndexOfConflictingTerm}. Leader's First Index of Conflicting Term is equal to the follower's first Index of Conflicting Term",
-                        EntitySubject = LeaderVolatilePropertiesEntity,
-                        Event = DecrementedNextIndex,
+                        EntitySubject = Entity,
+                        Event = DecrementedNextIndexToFirstIndexOfLeaderTermCorrespondingToConflictingIndexEntry,
                         Level = ActivityLogLevel.Debug,
-
                     }
-                    .With(ActivityParam.New(NodeId, externalServerId))
-                    .With(ActivityParam.New(CurrentNextIndex, currentNextIndex))
-                    .With(ActivityParam.New(NewNextIndex, followerFirstIndexOfConflictingTerm.Value))
-                    .With(ActivityParam.New(ConflictTermOfFollower, followerConflictTerm))
-                    .With(ActivityParam.New(FirstIndexOfConflictingTerm, followerFirstIndexOfConflictingTerm))
+                    .With(ActivityParam.New(nodeId, externalServerId))
+                    .With(ActivityParam.New(LeaderVolatileProperties.currentNextIndex, currentNextIndex))
+                    .With(ActivityParam.New(newNextIndex, firstIndexOfleaderTermOfConflictingIndexEntry.Value))
+                    .With(ActivityParam.New(conflictTermOfFollower, followerConflictTerm))
+                    .With(ActivityParam.New(firstIndexOfConflictingTerm, followerFirstIndexOfConflictingTerm))
                     .WithCallerInfo());
                 }
-                else if (firstIndexOfConflictTerm < followerFirstIndexOfConflictingTerm)
-                {
-                    NextIndexForServers.TryUpdate(externalServerId, firstIndexOfConflictTerm.Value, currentNextIndex);
-
-
-                    ActivityLogger?.Log(new CoracleActivity
-                    {
-                        Description = $"Decremented Next Index for Server {externalServerId} from {currentNextIndex} to {firstIndexOfConflictTerm.Value}. ConflictTerm:{followerConflictTerm} FirstIndexConflictTerm:{followerFirstIndexOfConflictingTerm}. Leader's First Index of Conflicting Term is less than the follower's first Index of Conflicting Term",
-                        EntitySubject = LeaderVolatilePropertiesEntity,
-                        Event = DecrementedNextIndex,
-                        Level = ActivityLogLevel.Debug,
-
-                    }
-                    .With(ActivityParam.New(NodeId, externalServerId))
-                    .With(ActivityParam.New(CurrentNextIndex, currentNextIndex))
-                    .With(ActivityParam.New(NewNextIndex, firstIndexOfConflictTerm.Value))
-                    .With(ActivityParam.New(ConflictTermOfFollower, followerConflictTerm))
-                    .With(ActivityParam.New(FirstIndexOfConflictingTerm, followerFirstIndexOfConflictingTerm))
-                    .WithCallerInfo());
-                }
-                else if (firstIndexOfConflictTerm > followerFirstIndexOfConflictingTerm)
-                {
-                    var previousTerm = await PersistentState.LogEntries.GetTermAtIndex(firstIndexOfConflictTerm.Value - 1);
-
-                    var firstIndexOfPreviousTerm = await PersistentState.LogEntries.GetFirstIndexForTerm(previousTerm);
-
-                    NextIndexForServers.TryUpdate(externalServerId, firstIndexOfPreviousTerm.Value, currentNextIndex);
-
-
-                    ActivityLogger?.Log(new CoracleActivity
-                    {
-                        Description = $"Decremented Next Index for Server {externalServerId} from {currentNextIndex} to {firstIndexOfPreviousTerm.Value}. ConflictTerm:{followerConflictTerm} FirstIndexConflictTerm:{followerFirstIndexOfConflictingTerm}. Leader's First Index of Conflicting Term is greater than the follower's first Index of Conflicting Term",
-                        EntitySubject = LeaderVolatilePropertiesEntity,
-                        Event = DecrementedNextIndex,
-                        Level = ActivityLogLevel.Debug,
-
-                    }
-                    .With(ActivityParam.New(NodeId, externalServerId))
-                    .With(ActivityParam.New(CurrentNextIndex, currentNextIndex))
-                    .With(ActivityParam.New(NewNextIndex, firstIndexOfPreviousTerm.Value))
-                    .With(ActivityParam.New(ConflictTermOfFollower, followerConflictTerm))
-                    .With(ActivityParam.New(FirstIndexOfConflictingTerm, followerFirstIndexOfConflictingTerm))
-                    .WithCallerInfo());
-                }
-
-                return;
             }
-
-            NextIndexForServers.TryUpdate(externalServerId, 1, currentNextIndex);
-
-            ActivityLogger?.Log(new CoracleActivity
-            {
-                Description = $"Decremented Next Index for Server {externalServerId} from {currentNextIndex} to {1}. Since no condition determined.",
-                EntitySubject = LeaderVolatilePropertiesEntity,
-                Event = UpdatedNextIndexToOne,
-                Level = ActivityLogLevel.Debug,
-
-            }
-            .With(ActivityParam.New(NodeId, externalServerId))
-            .With(ActivityParam.New(CurrentNextIndex, currentNextIndex))
-            .With(ActivityParam.New(NewNextIndex, 1))
-            .WithCallerInfo());
         }
 
-        public long GetNextIndex(string externalServerId)
+        /// <summary>
+        /// This is called when AppendEntriesRPCResponse returns a non-Success operation. 
+        /// NextIndex needs to be decremented, and more logs will be sent to bring the follower up to speed.
+        /// </summary>
+        /// <param name="externalServerId"></param>
+        public Task DecrementNextIndex(string externalServerId)
         {
-            NextIndexForServers.TryGetValue(externalServerId, out long value);
+            if (!Indices.TryGetValue(externalServerId, out var indices))
+                return Task.CompletedTask;
+
+            var currentNextIndex = indices.NextIndex;
+
+            var newNextIndex = --indices.NextIndex;
 
             ActivityLogger?.Log(new CoracleActivity
             {
-                Description = $"Fetched Next Index for server {externalServerId} : {value}",
-                EntitySubject = LeaderVolatilePropertiesEntity,
-                Event = RetrieveNextIndex,
+                EntitySubject = Entity,
+                Event = DecrementedNextIndex,
                 Level = ActivityLogLevel.Debug,
-
             }
-            .With(ActivityParam.New(NodeId, externalServerId))
-            .With(ActivityParam.New(NextIndex, value))
+            .With(ActivityParam.New(nodeId, externalServerId))
+            .With(ActivityParam.New(LeaderVolatileProperties.currentNextIndex, currentNextIndex))
+            .With(ActivityParam.New(LeaderVolatileProperties.newNextIndex, newNextIndex))
             .WithCallerInfo());
 
-            return value;
+            return Task.CompletedTask;
         }
 
         /// <summary>
@@ -319,65 +282,52 @@ namespace Core.Raft.Canoe.Engine.States
         /// </summary>
         /// <param name="externalServerId"></param>
         /// <param name="maxIndexReplicated"></param>
-        public void UpdateMatchIndex(string externalServerId, long? maxIndexReplicated = null)
+        public void UpdateIndices(string externalServerId, long maxIndexReplicated)
         {
-            //Increases Monotonically
-            if (maxIndexReplicated.HasValue && maxIndexReplicated < MatchIndexForServers[externalServerId])
-            {
-                throw new InvalidOperationException($"NextIndex {maxIndexReplicated} cannot be lesser than already established {MatchIndexForServers[externalServerId]}");
-            }
+            if (!Indices.TryGetValue(externalServerId, out var indices))
+                return;
 
-            var lastIndex = maxIndexReplicated ?? PersistentState.LogEntries.GetLastIndex().GetAwaiter().GetResult();
+            var nextIndexToMark = maxIndexReplicated + 1;
 
-            MatchIndexForServers[externalServerId] = lastIndex;
+            indices.MatchIndex = maxIndexReplicated;
+            indices.NextIndex = nextIndexToMark;
 
             ActivityLogger?.Log(new CoracleActivity
             {
-                Description = $"Updated Match Index for Server {externalServerId} to {lastIndex}",
-                EntitySubject = LeaderVolatilePropertiesEntity,
-                Event = UpdatedMatchIndex,
+                EntitySubject = Entity,
+                Event = UpdatedIndices,
                 Level = ActivityLogLevel.Debug,
 
             }
-            .With(ActivityParam.New(NodeId, externalServerId))
-            .With(ActivityParam.New(NewMatchIndex, lastIndex))
+            .With(ActivityParam.New(nodeId, externalServerId))
+            .With(ActivityParam.New(newMatchIndex, maxIndexReplicated))
+            .With(ActivityParam.New(newNextIndex, nextIndexToMark))
             .WithCallerInfo());
         }
 
-        //TODO: Should we check if the Log Entry for the Command has been applied to a majority of the cluster INCLUSIVE of ourselves? Cuz currently only peers are being counted except the leader
-        public bool HasMatchIndexUpdatedForMajority(long index)
+        public bool AreMajorityOfServersHavingEntriesUpUntilIndexReplicated(long index)
         {
-            int total = 0;
+            var peerNodeCountWhoHaveReplicatedGivenIndex = 
+                Indices.Values.Select(x=> x.MatchIndex).Where(matchIndex => matchIndex >= index).Count();
 
-            foreach (var matchIndex in MatchIndexForServers.Values)
-            {
-                if (matchIndex >= index)
-                {
-                    ++total;
-                }
-            }
+            int currentNode = ClusterConfiguration.IsThisNodePartOfCluster ? 1 : default;
+
+            var totalNodes = Indices.Count + currentNode;
 
             ActivityLogger?.Log(new CoracleActivity
             {
-                Description = $"HasMatchIndexUpdatedForMajority Check for index {index}.. Total Votes: {total} Total Servers: {MatchIndexForServers.Count}",
-                EntitySubject = LeaderVolatilePropertiesEntity,
+                EntitySubject = Entity,
                 Event = MatchIndexUpdateForMajority,
                 Level = ActivityLogLevel.Debug,
 
             }
-            .With(ActivityParam.New(IndexToCheck, index))
-            .With(ActivityParam.New(TotalVotes, total))
-            .With(ActivityParam.New(TotalNodes, MatchIndexForServers.Count))
+            .With(ActivityParam.New(indexToCheck, index))
+            .With(ActivityParam.New(peerNodesWhichHaveReplicated, peerNodeCountWhoHaveReplicatedGivenIndex))
+            .With(ActivityParam.New(totalNodesInCluster, totalNodes))
             .WithCallerInfo());
 
-            return total >= Math.Floor(MatchIndexForServers.Count / 2d) + 1; 
-        }
-
-        public void Dispose()
-        {
-            PersistentState = null;
-            NextIndexForServers = null;
-            MatchIndexForServers = null;
+            // Check for Majority
+            return peerNodeCountWhoHaveReplicatedGivenIndex + currentNode >= Math.Floor(totalNodes / 2d) + 1; 
         }
 
         public void HandleConfigurationChange(IEnumerable<INodeConfiguration> newPeerNodeConfigurations)
@@ -386,7 +336,7 @@ namespace Core.Raft.Canoe.Engine.States
 
             var serverIdsWhichHaveBeenRemoved = new HashSet<string>();
 
-            foreach (var currentNodeId in NextIndexForServers.Keys)
+            foreach (var currentNodeId in Indices.Keys)
             {
                 if (newClusterMemberIds.ContainsKey(currentNodeId))
                 {
@@ -406,25 +356,29 @@ namespace Core.Raft.Canoe.Engine.States
 
                 foreach (var node in serverIdsWhichHaveBeenAdded)
                 {
-                    NextIndexForServers.TryAdd(node.Key, lastIndex + 1);
-                    MatchIndexForServers.TryAdd(node.Key, 0);
+                    var initialValues = new ServerIndices
+                    {
+                        MatchIndex = 0,
+                        NextIndex = lastIndex + 1
+                    };
+
+                    Indices.TryAdd(node.Key, initialValues);
                 }
             }
 
             foreach (var nodeId in serverIdsWhichHaveBeenRemoved)
             {
-                NextIndexForServers.TryRemove(nodeId, out var n);
-                MatchIndexForServers.TryRemove(nodeId, out var m);
+                Indices.TryRemove(nodeId, out var _);
             }
 
             ActivityLogger?.Log(new CoracleActivity
             {
-                EntitySubject = LeaderVolatilePropertiesEntity,
+                EntitySubject = Entity,
                 Event = NewConfigurationManagement,
                 Level = ActivityLogLevel.Debug,
             }
-            .With(ActivityParam.New(NodesToRemove, serverIdsWhichHaveBeenRemoved))
-            .With(ActivityParam.New(NodesToAdd, serverIdsWhichHaveBeenAdded))
+            .With(ActivityParam.New(nodesToRemove, serverIdsWhichHaveBeenRemoved))
+            .With(ActivityParam.New(nodesToAdd, serverIdsWhichHaveBeenAdded))
             .WithCallerInfo());
         }
     }

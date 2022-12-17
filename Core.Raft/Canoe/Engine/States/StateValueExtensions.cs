@@ -7,6 +7,11 @@
             return state == StateValues.Leader;
         }
 
+        public static bool IsLeaderOrFollower(this StateValues state)
+        {
+            return IsLeader(state) || IsFollower(state);
+        }
+
         public static bool IsCandidate(this StateValues state)
         {
             return state == StateValues.Candidate;
@@ -14,12 +19,13 @@
 
         public static bool IsFollower(this StateValues state)
         {
-            return state == StateValues.NotStarted;
+            return state == StateValues.Follower;
+            
         }
 
         public static bool IsNotStarted(this StateValues state)
         {
-            return state == StateValues.Follower;
+            return state == StateValues.NotStarted;
         }
 
         public static bool IsAbandoned(this StateValues state)

@@ -13,11 +13,11 @@ namespace Core.Raft.Canoe.Engine.Actions.Awaiters
     internal sealed class OnCatchUpOfNewlyAddedNodes : EventAction<OnCatchUpOfNewlyAddedNodesContext, EmptyOperationResult>
     {
         #region Constants
-        public string Entity = nameof(OnCatchUpOfNewlyAddedNodes);
-        public string NodesCaughtUp = nameof(NodesCaughtUp);
-        public string NodesNotCaughtUpYet = nameof(NodesNotCaughtUpYet);
-        public string InvalidContext = nameof(InvalidContext);
-        public string nodesToCheck = nameof(nodesToCheck);
+        public const string ActionName = nameof(OnCatchUpOfNewlyAddedNodes);
+        public const string NodesCaughtUp = nameof(NodesCaughtUp);
+        public const string NodesNotCaughtUpYet = nameof(NodesNotCaughtUpYet);
+        public const string InvalidContext = nameof(InvalidContext);
+        public const string nodesToCheck = nameof(nodesToCheck);
         #endregion 
 
         public OnCatchUpOfNewlyAddedNodes(long logEntryIndex, string[] nodesToCheckAgainst, OnCatchUpOfNewlyAddedNodesContextDependencies input, IActivityLogger activityLogger = null) : base(new OnCatchUpOfNewlyAddedNodesContext(logEntryIndex, nodesToCheckAgainst, input)
@@ -29,7 +29,7 @@ namespace Core.Raft.Canoe.Engine.Actions.Awaiters
 
         public override TimeSpan TimeOut => TimeSpan.FromMilliseconds(Input.EngineConfiguration.CatchUpOfNewNodesTimeout_InMilliseconds);
         public TimeSpan WaitInterval => TimeSpan.FromMilliseconds(Input.EngineConfiguration.CatchUpOfNewNodesWaitInterval_InMilliseconds);
-        public override string UniqueName => Entity;
+        public override string UniqueName => ActionName;
 
         protected override async Task<EmptyOperationResult> Action(CancellationToken cancellationToken)
         {
@@ -40,7 +40,7 @@ namespace Core.Raft.Canoe.Engine.Actions.Awaiters
                 foreach (var externalServerId in Input.NodesToCheck)
                 {
                     caughtUp = caughtUp & 
-                        leaderState.LeaderProperties.MatchIndexForServers.TryGetValue(externalServerId, out var matchIndex) && matchIndex >= Input.LogEntryIndex;
+                        leaderState.LeaderProperties.TryGetMatchIndex(externalServerId, out var matchIndex) && matchIndex >= Input.LogEntryIndex;
                 }
 
                 if (caughtUp)

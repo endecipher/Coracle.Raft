@@ -70,6 +70,8 @@ namespace Core.Raft.Canoe.Engine.States
         {
             var term = await PersistentState.IncrementCurrentTerm();
 
+            await PersistentState.SetVotedFor(EngineConfiguration.NodeId);
+
             ActivityLogger.Log(new CoracleActivity
             {
                 EntitySubject = Entity,

@@ -6,6 +6,7 @@ using ActivityLogger.Logging;
 using ActivityLogLevel = ActivityLogger.Logging.ActivityLogLevel;
 using Coracle.IntegrationTests.Components.Logging;
 using Newtonsoft.Json;
+using Core.Raft.Canoe.Engine.Configuration.Cluster;
 
 namespace Coracle.IntegrationTests.Components.PersistentData
 {
@@ -15,12 +16,13 @@ namespace Coracle.IntegrationTests.Components.PersistentData
     public class TestLogHolder : IPersistentReplicatedLogHolder
     {
         #region Constants 
-        private const string ReplicatedLogHolderEntity = nameof(TestLogHolder);
-        private const string LogChain = nameof(LogChain);
-        private const string OverwriteEntries = nameof(OverwriteEntries);
-        private const string AppendNew = nameof(AppendNew);
-        private const string AppendNoOp = nameof(AppendNoOp);
-        private const string DeleteAllEntriesStartingFrom = nameof(DeleteAllEntriesStartingFrom);
+        public const string Entity = nameof(TestLogHolder);
+        public const string LogChain = nameof(LogChain);
+        public const string OverwritingEntries = nameof(OverwritingEntries);
+        public const string AppendNew = nameof(AppendNew);
+        public const string AppendNoOp = nameof(AppendNoOp);
+        public const string AppendConf = nameof(AppendConf);
+        public const string DeleteAllEntriesStartingFrom = nameof(DeleteAllEntriesStartingFrom);
 
         #endregion 
         IActivityLogger ActivityLogger { get; }
@@ -36,16 +38,12 @@ namespace Coracle.IntegrationTests.Components.PersistentData
                 {
                     CurrentIndex = 0,
                     Term = 0,
-                    Contents = null as ICommand,
-                    IsConfiguration = false,
-                    IsEmpty = true,
-                    IsExecutable = false,
+                    Contents = null,
+                    Type = LogEntry.Types.None
                 }
             };
             Properties = persistentProperties;
         }
-
-        private int LastIndex => LogEntries.Count - 1;
 
         public IPersistentProperties Properties { get; }
 
@@ -53,7 +51,7 @@ namespace Coracle.IntegrationTests.Components.PersistentData
         {
             ActivityLogger?.Log(new ImplActivity
             {
-                EntitySubject = ReplicatedLogHolderEntity,
+                EntitySubject = Entity,
                 Event = eventString,
                 Level = ActivityLogLevel.Debug,
             }
@@ -61,7 +59,7 @@ namespace Coracle.IntegrationTests.Components.PersistentData
             .WithCallerInfo());
         }
 
-        public Task AppendEntriesWithOverwrite(IEnumerable<LogEntry> logEntries)
+        public Task OverwriteEntries(IEnumerable<LogEntry> logEntries)
         {
             lock (obj)
             {
@@ -71,61 +69,11 @@ namespace Coracle.IntegrationTests.Components.PersistentData
 
                 LogEntries.InsertRange((int)index, logEntries);
 
-                Snap(OverwriteEntries);
+                Snap(OverwritingEntries);
 
                 return Task.CompletedTask;
             }
         }
-
-        public async Task<LogEntry> AppendNewEntry<TCommand>(TCommand inputCommand) where TCommand : class, ICommand
-        {
-            long term = await Properties.GetCurrentTerm();
-
-            lock (obj)
-            {
-                LogEntry item = new LogEntry
-                {
-                    CurrentIndex = LogEntries.Count() - 1,
-                    Term = term,
-                    Contents = inputCommand,
-                    IsConfiguration = false,
-                    IsExecutable = true,
-                    IsEmpty = false
-                };
-
-                LogEntries.Add(item);
-
-                Snap(AppendNew);
-
-                return item;
-            }
-        }
-
-        public async Task AppendNoOperationEntry()
-        {
-            long term = await Properties.GetCurrentTerm();
-
-            lock (obj)
-            {
-                LogEntry item = new LogEntry
-                {
-                    CurrentIndex = LogEntries.Count - 1,
-                    Term = term,
-                    Contents = null,
-                    IsExecutable = false,
-                    IsConfiguration = false,
-                    IsEmpty = true,
-
-                };
-
-                LogEntries.Add(item);
-
-                Snap(AppendNoOp);
-
-                return;
-            }
-        }
-
         public Task DeleteAllEntriesStartingFromIndex(long index)
         {
             int ix = (int)index;
@@ -161,7 +109,7 @@ namespace Coracle.IntegrationTests.Components.PersistentData
         {
             lock (obj)
             {
-                return Task.FromResult(LogEntries.GetRange((int)startIndex, (int)endIndex) as IEnumerable<LogEntry>);
+                return Task.FromResult(LogEntries.GetRange((int)startIndex, (int)endIndex - (int)startIndex + 1) as IEnumerable<LogEntry>);
             }
         }
 
@@ -201,7 +149,14 @@ namespace Coracle.IntegrationTests.Components.PersistentData
         {
             lock (obj)
             {
-                return Task.FromResult(LogEntries[(int)index]);
+                try
+                {
+                    return Task.FromResult(LogEntries[(int)index]);
+                }
+                catch //In case the NextIndex is 0 (from OnSendAppendEntriesRPC), the Previous Index will be -1, which doesn't exist. Thus handling that case
+                {
+                    return Task.FromResult<LogEntry>(null);
+                }
             }
         }
 
@@ -211,6 +166,90 @@ namespace Coracle.IntegrationTests.Components.PersistentData
             {
                 return Task.FromResult(LogEntries.Last());
             }
+        }
+
+
+        public async Task<LogEntry> AppendNewCommandEntry<TCommand>(TCommand inputCommand) where TCommand : class, ICommand
+        {
+            long term = await Properties.GetCurrentTerm();
+
+            lock (obj)
+            {
+                LogEntry item = new LogEntry
+                {
+                    CurrentIndex = LogEntries.Count,
+                    Term = term,
+                    Contents = inputCommand,
+                    Type = LogEntry.Types.Command
+                };
+
+                LogEntries.Add(item);
+
+                Snap(AppendNew);
+
+                return item;
+            }
+        }
+
+        public async Task AppendNoOperationEntry()
+        {
+            long term = await Properties.GetCurrentTerm();
+
+            lock (obj)
+            {
+                LogEntry item = new LogEntry
+                {
+                    CurrentIndex = LogEntries.Count,
+                    Term = term,
+                    Contents = null,
+                    Type = LogEntry.Types.NoOperation
+
+                };
+
+                LogEntries.Add(item);
+
+                Snap(AppendNoOp);
+
+                return;
+            }
+        }
+
+        public async Task<LogEntry> AppendConfigurationEntry(IEnumerable<NodeConfiguration> configurations)
+        {
+            long term = await Properties.GetCurrentTerm();
+
+            lock (obj)
+            {
+                LogEntry item = new LogEntry
+                {
+                    CurrentIndex = LogEntries.Count,
+                    Term = term,
+                    Contents = configurations,
+                    Type = LogEntry.Types.Configuration
+                };
+
+                LogEntries.Add(item);
+
+                Snap(AppendConf);
+
+                return item;
+            }
+        }
+
+        public Task<IEnumerable<NodeConfiguration>> ReadFrom(LogEntry configurationLogEntry)
+        {
+            if (configurationLogEntry.Contents is IEnumerable<NodeConfiguration> conf)
+                return Task.FromResult(conf);
+            
+            throw new InvalidOperationException();
+        }
+
+        public Task<ICommand> ReadFrom<ICommand>(LogEntry commandLogEntry)
+        {
+            if (commandLogEntry.Contents is ICommand command)
+                return Task.FromResult(command);
+
+            throw new InvalidOperationException();
         }
     }
 }

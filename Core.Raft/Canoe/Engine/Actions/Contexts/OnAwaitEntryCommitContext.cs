@@ -24,7 +24,7 @@ namespace Core.Raft.Canoe.Engine.Actions.Contexts
         public bool IsContextValid => !State.IsDisposed && !State.StateValue.IsAbandoned() && !State.StateValue.IsNotStarted();
 
         internal long LogEntryIndex { get; }
-        internal IChangingState State { get; set; }
+        internal IChangingState State => CurrentStateAccessor.Get();
 
         internal DateTimeOffset InvocationTime { get; set; }
 
@@ -40,7 +40,6 @@ namespace Core.Raft.Canoe.Engine.Actions.Contexts
 
         public void Dispose()
         {
-            State = null;
             Dependencies = null;
         }
     }

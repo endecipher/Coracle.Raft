@@ -15,7 +15,7 @@ namespace Core.Raft.Canoe.Engine.States
     {
         IHeartbeatTimer HeartbeatTimer { get; set; }
         ILeaderNodePronouncer LeaderNodePronouncer { get; set; }
-        LeaderVolatileProperties LeaderProperties { get; set; }
+        ILeaderVolatileProperties LeaderProperties { get; set; }
         IAppendEntriesManager AppendEntriesManager { get; set; }
     }
 
@@ -43,7 +43,7 @@ namespace Core.Raft.Canoe.Engine.States
         #region Additional Dependencies
         public IHeartbeatTimer HeartbeatTimer { get; set; }
         public ILeaderNodePronouncer LeaderNodePronouncer { get; set; }
-        public LeaderVolatileProperties LeaderProperties { get; set; }
+        public ILeaderVolatileProperties LeaderProperties { get; set; }
         public IAppendEntriesManager AppendEntriesManager { get; set; }
         #endregion
 
@@ -68,7 +68,6 @@ namespace Core.Raft.Canoe.Engine.States
         {
             await base.OnStateChangeBeginDisposal();
 
-            LeaderProperties.Dispose();
             HeartbeatTimer.Dispose();
         }
 
@@ -77,6 +76,10 @@ namespace Core.Raft.Canoe.Engine.States
             await base.InitializeOnStateChange(volatileProperties);
 
             StateValue = StateValues.Leader;
+
+            LeaderProperties.Initialize();
+
+            AppendEntriesManager.Initialize();
 
             //COMMENT: Recognize itself as Leader
             LeaderNodePronouncer.SetRunningNodeAsLeader();
@@ -117,6 +120,7 @@ namespace Core.Raft.Canoe.Engine.States
             /// </remarks>
             var task = PersistentState.LogEntries.AppendNoOperationEntry();
             task.Wait();
+
 
             /// <remarks>
             /// Once a candidate wins an election, it becomes leader. 
@@ -174,7 +178,7 @@ namespace Core.Raft.Canoe.Engine.States
                 /// </remarks>
                 long logTerm = await PersistentState.LogEntries.GetTermAtIndex(i);
 
-                if (LeaderProperties.HasMatchIndexUpdatedForMajority(i) && logTerm == currentTerm)
+                if (LeaderProperties.AreMajorityOfServersHavingEntriesUpUntilIndexReplicated(i) && logTerm == currentTerm)
                 {
                     //TODO: Introduce Object Locks
                     UpdateCommitIndex(i);

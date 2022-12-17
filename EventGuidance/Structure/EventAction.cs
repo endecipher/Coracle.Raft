@@ -132,6 +132,15 @@ namespace EventGuidance.Structure
             await Task.CompletedTask;
         }
 
+        /// <summary>
+        /// Fired after the <see cref="IActionJetton.SetResultIfAny{T}(T, System.Exception)"/> is called
+        /// </summary>
+        /// <returns></returns>
+        protected virtual async Task OnEventActionEnd()
+        {
+            await Task.CompletedTask;
+        }
+
         #endregion
 
         /// <summary>
@@ -172,6 +181,8 @@ namespace EventGuidance.Structure
                 else
                 {
                     Log(_SkipProceeding);
+
+                    jetton.MoveToSkipped();
                 }
             }
             catch (TimeoutException t)
@@ -226,6 +237,8 @@ namespace EventGuidance.Structure
             Log(_PostProcessSignalling);
 
             jetton.SetResultIfAny<TOutput>(output, exception);
+
+            await OnEventActionEnd();
         }
 
         private void Log(string ev, Exception ex = null)

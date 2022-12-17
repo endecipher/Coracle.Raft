@@ -52,20 +52,6 @@ namespace Core.Raft.Canoe.Engine.ClientHandling
 
         public async Task<ClientHandlingResult> HandleClientCommand<TCommand>(TCommand Command, CancellationToken cancellationToken) where TCommand : class, ICommand
         {
-            /// <remarks>
-            /// If the leader crashes after committing the log entry but before responding to the client, the client will retry the command with a
-            /// new leader, causing it to be executed a second time. 
-            /// The solution is for clients to assign unique serial numbers to
-            /// every command. Then, the state machine tracks the latest
-            /// serial number processed for each client, along with the associated response.If it receives a command whose serial
-            /// number has already been executed, it responds immediately without re - executing the request.
-            /// <see cref="Section 8 Client Interaction"/>
-            /// </remarks>
-            if (await RequestHandler.TryGetCommandResult(Command, out ClientHandlingResult existingResult))
-            {
-                return existingResult;
-            }
-
             ClientHandlingResult result;
 
             var action = new OnClientCommandReceive<TCommand>(Command, CurrentStateAccessor.Get(), new Actions.Contexts.OnClientCommandReceiveContextDependencies

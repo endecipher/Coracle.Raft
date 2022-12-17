@@ -5,7 +5,7 @@ using System.Threading;
 
 namespace Core.Raft.Canoe.Engine.Helper
 {
-    internal class HeartbeatTimer : IHeartbeatTimer
+    internal sealed class HeartbeatTimer : IHeartbeatTimer
     {
         #region Constants
 
@@ -28,7 +28,7 @@ namespace Core.Raft.Canoe.Engine.Helper
 
         public Timer Timer = null;
 
-        public virtual void RegisterNew(TimerCallback timerCallback)
+        public void RegisterNew(TimerCallback timerCallback)
         {
             Timer = new Timer((state) =>
             {

@@ -1,5 +1,6 @@
 ﻿using ActivityLogger.Logging;
 using Core.Raft.Canoe.Engine.Actions.Contexts;
+using Core.Raft.Canoe.Engine.ActivityLogger;
 using Core.Raft.Canoe.Engine.Configuration;
 using Core.Raft.Canoe.Engine.Configuration.Cluster;
 using Core.Raft.Canoe.Engine.Operational;
@@ -15,6 +16,17 @@ namespace Core.Raft.Canoe.Engine.Actions.Awaiters
 {
     internal sealed class GlobalAwaiter : IGlobalAwaiter
     {
+        #region Constants
+
+        public const string Entity = nameof(GlobalAwaiter);
+        public const string AwaitingNodesToCatchUp = nameof(AwaitingNodesToCatchUp);
+        public const string AwaitingEntryCommit = nameof(AwaitingEntryCommit);
+        public const string AwaitingNoDeposition = nameof(AwaitingNoDeposition);
+        public const string indexToCheck = nameof(indexToCheck);
+        public const string nodesToCheck = nameof(nodesToCheck);
+
+        #endregion
+
         public GlobalAwaiter(
             IActivityLogger activityLogger,
             IEngineConfiguration engineConfiguration,
@@ -41,6 +53,16 @@ namespace Core.Raft.Canoe.Engine.Actions.Awaiters
 
         public void AwaitEntryCommit(long logEntryIndex, CancellationToken cancellationToken)
         {
+            ActivityLogger?.Log(new CoracleActivity
+            {
+                EntitySubject = Entity,
+                Event = AwaitingEntryCommit,
+                Level = ActivityLogLevel.Debug,
+
+            }
+            .With(ActivityParam.New(indexToCheck, logEntryIndex))
+            .WithCallerInfo());
+
             var action = new OnAwaitEntryCommit(logEntryIndex, new OnAwaitEntryCommitContextDependencies
             {
                 CurrentStateAccessor = CurrentStateAccessor,
@@ -57,6 +79,17 @@ namespace Core.Raft.Canoe.Engine.Actions.Awaiters
 
         public void AwaitNodesToCatchUp(long logEntryIndex, string[] nodeIdsToCheck, CancellationToken cancellationToken)
         {
+            ActivityLogger?.Log(new CoracleActivity
+            {
+                EntitySubject = Entity,
+                Event = AwaitingNodesToCatchUp,
+                Level = ActivityLogLevel.Debug,
+
+            }
+            .With(ActivityParam.New(indexToCheck, logEntryIndex))
+            .With(ActivityParam.New(nodesToCheck, nodeIdsToCheck))
+            .WithCallerInfo());
+
             var action = new OnCatchUpOfNewlyAddedNodes(logEntryIndex, nodeIdsToCheck, new OnCatchUpOfNewlyAddedNodesContextDependencies
             {
                 CurrentStateAccessor = CurrentStateAccessor,
@@ -82,6 +115,15 @@ namespace Core.Raft.Canoe.Engine.Actions.Awaiters
             /// <seealso cref="Section 8 Client Interaction"/>
             /// </remarks>
             /// 
+
+            ActivityLogger?.Log(new CoracleActivity
+            {
+                EntitySubject = Entity,
+                Event = AwaitingNoDeposition,
+                Level = ActivityLogLevel.Debug,
+
+            }
+            .WithCallerInfo());
 
             IDictionary<string, DateTimeOffset> lastPings = null;
 

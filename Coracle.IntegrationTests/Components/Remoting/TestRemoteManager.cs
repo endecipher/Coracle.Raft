@@ -4,6 +4,7 @@ using Coracle.IntegrationTests.Framework;
 using Core.Raft.Canoe.Engine.ClientHandling;
 using Core.Raft.Canoe.Engine.Command;
 using Core.Raft.Canoe.Engine.Configuration.Cluster;
+using Core.Raft.Canoe.Engine.Operational;
 using Core.Raft.Canoe.Engine.Remoting;
 using Core.Raft.Canoe.Engine.Remoting.RPC;
 using System.Net.Http.Json;
@@ -80,28 +81,5 @@ namespace Coracle.IntegrationTests.Components.Remoting
 
             return Task.FromResult(operationResult);
         }
-
-        public async Task<ClientHandlingResult> ForwardToLeader<TCommand>(TCommand command, INodeConfiguration configuration, CancellationToken cancellationToken)
-            where TCommand : class, ICommand
-        {
-            ClientHandlingResult operationResult = new ClientHandlingResult();
-
-            //try
-            //{
-            //    var requestUri = new Uri(configuration.BaseUri, "CommandHandling");
-            //    var httpClient = HttpClientFactory.CreateClient();
-
-            //    var httpresponse = await httpClient.PostAsJsonAsync(requestUri, command, options: null, cancellationToken);
-
-            //    operationResult = await httpresponse.Content.ReadFromJsonAsync<ClientHandlingResult>(cancellationToken: cancellationToken);
-            //}
-            //catch (Exception ex)
-            //{
-            //    operationResult.Exception = ex;
-            //}
-
-            return operationResult;
-        }
     }
-
 }

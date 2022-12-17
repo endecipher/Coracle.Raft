@@ -41,6 +41,7 @@ namespace Core.Raft.Canoe.Engine.States
         IAppendEntriesManager AppendEntriesManager { get; }
         IClusterConfigurationChanger ClusterConfigurationChanger { get; }
         IElectionManager ElectionManager { get; }
+        ILeaderVolatileProperties LeaderVolatileProperties { get; }
 
         #endregion
 
@@ -60,7 +61,8 @@ namespace Core.Raft.Canoe.Engine.States
             ICurrentStateAccessor currentStateAccessor,
             IAppendEntriesManager appendEntriesManager,
             IClusterConfigurationChanger clusterConfigurationChanger,
-            IElectionManager electionManager
+            IElectionManager electionManager,
+            ILeaderVolatileProperties leaderVolatileProperties
             )
         {
             ActivityLogger = activityLogger;
@@ -78,7 +80,10 @@ namespace Core.Raft.Canoe.Engine.States
             AppendEntriesManager = appendEntriesManager;
             ClusterConfigurationChanger = clusterConfigurationChanger;
             ElectionManager = electionManager;
+            LeaderVolatileProperties = leaderVolatileProperties;
         }
+
+        private static object _lock = new object();
 
         /// <summary>
         /// This encompasses creation and initialization of a new <see cref="Follower"/> state.
@@ -97,71 +102,79 @@ namespace Core.Raft.Canoe.Engine.States
                 LastApplied = 0
             };
 
-            initialFollowerState.InitializeOnStateChange(volatileProperties).Wait();
+            lock (_lock)
+            {
 
-            CurrentStateAccessor.UpdateWith(initialFollowerState);
+                initialFollowerState.InitializeOnStateChange(volatileProperties).Wait();
 
-            initialFollowerState.OnStateEstablishment().Wait();
+                CurrentStateAccessor.UpdateWith(initialFollowerState);
+
+                initialFollowerState.OnStateEstablishment().Wait();
+            }
         }
 
         public void AbandonStateAndConvertTo<T>(string typename) where T : IChangingState, new()
         {
-            bool canContinue = false;
-            Action<IChangingState> fillDependencies;
-            var oldStateValue = CurrentStateAccessor.Get().StateValue;
-
-            switch (typename)
+            lock (_lock)
             {
-                case nameof(Leader):
-                    canContinue = ValidateOldStateIn(oldStateValue, StateValues.Candidate);
-                    fillDependencies = FillLeaderDependencies;
-                    break;
-                case nameof(Candidate):
-                    canContinue = ValidateOldStateIn(oldStateValue, StateValues.Follower);
-                    fillDependencies = FillCandidateDependencies;
-                    break;
-                case nameof(Follower):
-                    canContinue = ValidateOldStateIn(oldStateValue, StateValues.Candidate, StateValues.Leader);
-                    fillDependencies = FillFollowerDependencies;
-                    break;
-                default:
-                    throw new ArgumentOutOfRangeException($"Invalid new state value {typename}");
-            }
+                bool canContinue = false;
+                Action<IChangingState> fillDependencies;
+                var oldStateValue = CurrentStateAccessor.Get().StateValue;
 
-            if (!canContinue)
-            {
-                //TODO: I think we can log Exception and not do anything
-                ActivityLogger?.Log(new CoracleActivity
+                switch (typename)
                 {
-                    Description = $"State change from {oldStateValue} to {typename} failed",
-                    EntitySubject = StateChangerEntity,
-                    Event = FailedToChangeStateDueToInvalidRoute,
-                    Level = ActivityLogLevel.Debug,
-
+                    case nameof(Leader):
+                        canContinue = ValidateOldStateIn(oldStateValue, StateValues.Candidate);
+                        fillDependencies = FillLeaderDependencies;
+                        break;
+                    case nameof(Candidate):
+                        canContinue = ValidateOldStateIn(oldStateValue, StateValues.Follower);
+                        fillDependencies = FillCandidateDependencies;
+                        break;
+                    case nameof(Follower):
+                        canContinue = ValidateOldStateIn(oldStateValue, StateValues.Candidate, StateValues.Leader);
+                        fillDependencies = FillFollowerDependencies;
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException($"Invalid new state value {typename}");
                 }
-                .With(ActivityParam.New(OldStateValue, oldStateValue.ToString()))
-                .With(ActivityParam.New(NewStateValue, typename))
-                .WithCallerInfo());
 
-                return;
+                if (!canContinue)
+                {
+                    //TODO: I think we can log Exception and not do anything
+                    ActivityLogger?.Log(new CoracleActivity
+                    {
+                        Description = $"State change from {oldStateValue} to {typename} failed",
+                        EntitySubject = StateChangerEntity,
+                        Event = FailedToChangeStateDueToInvalidRoute,
+                        Level = ActivityLogLevel.Debug,
+
+                    }
+                    .With(ActivityParam.New(OldStateValue, oldStateValue.ToString()))
+                    .With(ActivityParam.New(NewStateValue, typename))
+                    .WithCallerInfo());
+
+                    return;
+                }
+
+
+                var newState = new T();
+
+                //Commented call to this, since ConfigureNew will be called internally at Abstract State level.
+                //ComponentContainer.Instance.GetInstance<IResponsibilities>().ConfigureNew();
+
+                var oldState = CurrentStateAccessor.Get();
+
+                fillDependencies.Invoke(newState);
+
+                newState.InitializeOnStateChange(oldState.VolatileState).Wait();
+
+                CurrentStateAccessor.UpdateWith(newState);
+
+                oldState.OnStateChangeBeginDisposal();
+
+                newState.OnStateEstablishment().Wait();
             }
-
-            var newState = new T();
-
-            //Commented call to this, since ConfigureNew will be called internally at Abstract State level.
-            //ComponentContainer.Instance.GetInstance<IResponsibilities>().ConfigureNew();
-
-            var oldState = CurrentStateAccessor.Get();
-
-            fillDependencies.Invoke(newState);
-
-            newState.InitializeOnStateChange(oldState.VolatileState).Wait();
-            
-            CurrentStateAccessor.UpdateWith(newState);
-            
-            oldState.OnStateChangeBeginDisposal();
-
-            newState.OnStateEstablishment().Wait();
         }
 
         private void FillLeaderDependencies(IChangingState newState)
@@ -173,7 +186,7 @@ namespace Core.Raft.Canoe.Engine.States
             var state = newState as ILeaderDependencies;
 
             state.LeaderNodePronouncer = LeaderNodePronouncer;
-            state.LeaderProperties = new LeaderVolatileProperties(ActivityLogger, ClusterConfiguration, PersistentState);
+            state.LeaderProperties = LeaderVolatileProperties;
             state.AppendEntriesManager = AppendEntriesManager;
             state.HeartbeatTimer = HeartbeatTimer;
         }

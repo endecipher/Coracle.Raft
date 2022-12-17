@@ -15,6 +15,7 @@ namespace ActivityMonitoring.Assertions.Core
         {
             Execute.Assertion
                 .BecauseOf(because, becauseArgs)
+                .WithExpectation(because, becauseArgs)
                 .Given(() => AssertableQueue.Queue)
                 .ForCondition((queue) =>
                 {
@@ -38,14 +39,15 @@ namespace ActivityMonitoring.Assertions.Core
                     }
 
                     return IsExpectedElementFound;
-                })
-                .FailWith($"{nameof(expectedData)} not found");
+                });
+                //.FailWith($"{nameof(expectedData)} not found");
         }
 
         public void UntilItSatisfies(Func<TData, bool> matchingCondition, string because = "", params object[] becauseArgs)
         {
             Execute.Assertion
                 .BecauseOf(because, becauseArgs)
+                .WithExpectation(because, becauseArgs)
                 .Given(() => AssertableQueue.Queue)
                 .ForCondition((queue) =>
                 {
@@ -62,8 +64,7 @@ namespace ActivityMonitoring.Assertions.Core
                     }
 
                     return IsExpectedElementFound;
-                })
-                .FailWith($"{nameof(matchingCondition)} failed to find any matches");
+                });
         }
     }
 }

@@ -18,11 +18,12 @@ namespace Core.Raft.Canoe.Engine.Actions
     {
         #region Constants
         public const string ActionName = nameof(OnSendRequestVoteRPC);
-        private const string InputData = nameof(InputData);
+        private const string inputData = nameof(inputData);
         private const string Sending = nameof(Sending);
-        private const string CallObject = nameof(CallObject);
+        private const string RevertingToFollower = nameof(RevertingToFollower);
+        private const string callObj = nameof(callObj);
         private const string Received = nameof(Received);
-        private const string ResponseObject = nameof(ResponseObject);
+        private const string responseObject = nameof(responseObject);
         private const string SendingOnException = nameof(SendingOnException);
         #endregion
         
@@ -69,8 +70,8 @@ namespace Core.Raft.Canoe.Engine.Actions
                 Level = ActivityLogLevel.Debug,
 
             }
-            .With(ActivityParam.New(CallObject, callObject))
-            .With(ActivityParam.New(InputData, Input))
+            .With(ActivityParam.New(callObj, callObject))
+            .With(ActivityParam.New(inputData, Input))
             .WithCallerInfo());
 
             var result = await Input.RemoteManager.Send
@@ -88,8 +89,8 @@ namespace Core.Raft.Canoe.Engine.Actions
                 Level = ActivityLogLevel.Debug,
 
             }
-            .With(ActivityParam.New(ResponseObject, result))
-            .With(ActivityParam.New(InputData, Input))
+            .With(ActivityParam.New(responseObject, result))
+            .With(ActivityParam.New(inputData, Input))
             .WithCallerInfo());
 
             if (!result.HasResponse)
@@ -102,11 +103,42 @@ namespace Core.Raft.Canoe.Engine.Actions
                     Level = ActivityLogLevel.Debug,
 
                 }
-                .With(ActivityParam.New(ResponseObject, result))
-                .With(ActivityParam.New(InputData, Input))
+                .With(ActivityParam.New(responseObject, result))
+                .With(ActivityParam.New(inputData, Input))
                 .WithCallerInfo());
 
                 (Input.State as Candidate).ElectionManager.IssueRetry(Input.NodeConfiguration.UniqueNodeId);
+
+                return result.Response;
+            }
+
+            /// <remarks>
+            /// All Servers: • If RPC request or response contains term T > currentTerm: set currentTerm = T, convert to follower (§5.1)
+            /// <seealso cref="Figure 2 Rules For Servers"/>
+            /// </remarks>
+            /// 
+            if (result.Response.Term > Input.ElectionTerm)
+            {
+                /// <remarks>
+                /// Current terms are exchanged whenever servers communicate; if one server’s current term is smaller than the other’s, 
+                /// then it updates its current term to the larger value.
+                /// <seealso cref="Section 5.1 Second-to-last para"/>
+                /// </remarks>
+                /// 
+
+                ActivityLogger?.Log(new CoracleActivity
+                {
+                    EntitySubject = ActionName,
+                    Event = RevertingToFollower,
+                    Level = ActivityLogLevel.Debug,
+
+                }
+                .With(ActivityParam.New(responseObject, result))
+                .WithCallerInfo());
+
+                await Input.PersistentState.SetCurrentTerm(result.Response.Term);
+
+                Input.State.StateChanger.AbandonStateAndConvertTo<Follower>(nameof(Follower));
             }
             else
             {

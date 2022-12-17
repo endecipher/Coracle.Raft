@@ -1,8 +1,6 @@
 ﻿using Core.Raft.Canoe.Engine.ClientHandling;
 using Core.Raft.Canoe.Engine.Command;
 using Core.Raft.Canoe.Engine.Configuration.Cluster;
-using Core.Raft.Canoe.Engine.Helper;
-using EventGuidance.Dependency;
 using ActivityLogger.Logging;
 using Coracle.IntegrationTests.Components.ClientHandling.Notes;
 using Coracle.IntegrationTests.Components.Logging;
@@ -31,12 +29,18 @@ namespace Coracle.IntegrationTests.Components.ClientHandling
         IActivityLogger ActivityLogger { get; }
         bool IncludeCommand => EngineConfiguration.IncludeOriginalClientCommandInResults;
 
+        LatestCommandDetails LatestCommand { get; set; }
 
-        public Task ExecuteAndApplyLogEntry(ICommand logEntryCommand)
+        class LatestCommandDetails
+        {
+            public string CommandId { get; set; }
+            public ClientHandlingResult Result { get; internal set; }
+        }
+
+        public async Task ExecuteAndApplyLogEntry(ICommand logEntryCommand)
         {
             ActivityLogger?.Log(new ImplActivity
             {
-                Description = $"Received command to process by State Machine: {logEntryCommand?.Stringify()}",
                 EntitySubject = SimpleClientRequestHandlerEntity,
                 Event = ExecutingAndApplyingLogEntryCommand,
                 Level = ActivityLogLevel.Debug,
@@ -48,12 +52,37 @@ namespace Coracle.IntegrationTests.Components.ClientHandling
 
             if (logEntryCommand == null || logEntryCommand.IsReadOnly || !logEntryCommand.Type.Equals(nameof(Notes.Add)))
             {
-                return Task.CompletedTask;
+                return;
             }
 
             Notes.Add(logEntryCommand.Data as Note);
 
-            return Task.CompletedTask;
+            LatestCommand = new LatestCommandDetails
+            {
+                CommandId = logEntryCommand.UniqueId,
+                Result = new ClientHandlingResult
+                {
+                    IsOperationSuccessful = true,
+                    OriginalCommand = IncludeCommand ? logEntryCommand : null,
+                }
+            };
+
+            await Task.CompletedTask;
+
+            return;
+        }
+
+        public Task<bool> IsCommandLatest(string uniqueCommandId, out ClientHandlingResult executedResult)
+        {
+            executedResult = null;
+
+            if (LatestCommand != null && LatestCommand.CommandId.Equals(uniqueCommandId))
+            {
+                executedResult = LatestCommand.Result;
+                return Task.FromResult(true);
+            }
+
+            return Task.FromResult(false);
         }
 
         public Task<bool> TryGetCommandResult<TCommand>(TCommand command, out ClientHandlingResult result)
@@ -61,7 +90,7 @@ namespace Coracle.IntegrationTests.Components.ClientHandling
         {
             ActivityLogger?.Log(new ImplActivity
             {
-                Description = $"Received command {nameof(TryGetCommandResult)}: {command?.Stringify()}",
+                Description = $"Received command {nameof(TryGetCommandResult)}",
                 EntitySubject = SimpleClientRequestHandlerEntity,
                 Event = GetCommandResult,
                 Level = ActivityLogLevel.Debug,

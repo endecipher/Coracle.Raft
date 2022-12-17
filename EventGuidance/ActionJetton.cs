@@ -108,7 +108,7 @@ namespace EventGuidance.Responsibilities
 
             FreeBlockingResources();
 
-            if (HasCompleted && Result is T result)
+            if ((HasCompleted || HasSkipped) && Result is T result)
             {
                 return result;
             }
@@ -134,6 +134,8 @@ namespace EventGuidance.Responsibilities
         public bool HasCanceled => Status == EventActionStatusValues.Cancelled;
 
         public bool HasCompleted => Status == EventActionStatusValues.Completed;
+        
+        public bool HasSkipped => Status == EventActionStatusValues.Skipped;
 
         public bool HasTimedOut => Status == EventActionStatusValues.TimedOut;
 
@@ -148,6 +150,11 @@ namespace EventGuidance.Responsibilities
         public void MoveToCompleted()
         {
             Change(EventActionStatusValues.Completed);
+        }
+
+        public void MoveToSkipped()
+        {
+            Change(EventActionStatusValues.Skipped);
         }
 
         public void MoveToFaulted()

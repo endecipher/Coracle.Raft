@@ -13,6 +13,7 @@ namespace Core.Raft.Canoe.Engine.States.LeaderState
         /// This can also be called from Client Command Processing, i.e whenever a client Command is written to the log, and needs replication
         /// </summary>
         void InitiateAppendEntries();
+        void Initialize();
         bool CanSendTowards(string uniqueNodeId);
         void IssueRetry(string uniqueNodeId);
         void UpdateFor(string uniqueNodeId);

@@ -90,24 +90,24 @@ namespace Core.Raft.Canoe.Engine.States
         /// 
         /// <see cref="Figure 2 Rules For Servers | All Servers"/>
         /// </summary>
-        /// <param name="newIndex">New Commit Index to be</param>
+        /// <param name="indexToAssignAsCommitIndex">New Commit Index to be</param>
         /// <param name="applySynchronously">Flag to control whether the control flow needs to wait until all log Entries are applied to the state machine</param>
         /// <exception cref="ArgumentException"></exception>
-        internal void UpdateCommitIndex(long newIndex)
+        internal void UpdateCommitIndex(long indexToAssignAsCommitIndex)
         {
             ActivityLogger?.Log(new CoracleActivity
             {
-                Description = $"Updating Commit Index from {VolatileState.CommitIndex} to {newIndex}",
+                Description = $"Updating Commit Index from {VolatileState.CommitIndex} to {indexToAssignAsCommitIndex}",
                 EntitySubject = AbstractStateEntity,
                 Event = UpdatingCommitIndex,
                 Level = ActivityLogLevel.Debug,
 
             }
             .With(ActivityParam.New(OldCommitIndex, VolatileState.CommitIndex))
-            .With(ActivityParam.New(NewCommitIndex, newIndex))
+            .With(ActivityParam.New(NewCommitIndex, indexToAssignAsCommitIndex))
             .WithCallerInfo());
 
-            if (newIndex <= VolatileState.CommitIndex)
+            if (indexToAssignAsCommitIndex <= VolatileState.CommitIndex)
             {
                 ActivityLogger?.Log(new CoracleActivity
                 {
@@ -117,7 +117,7 @@ namespace Core.Raft.Canoe.Engine.States
                     Level = ActivityLogLevel.Error,
 
                 }
-                .With(ActivityParam.New(NewCommitIndex, newIndex))
+                .With(ActivityParam.New(NewCommitIndex, indexToAssignAsCommitIndex))
                 .With(ActivityParam.New(OldCommitIndex, VolatileState.CommitIndex))
                 .WithCallerInfo());
 
@@ -138,14 +138,14 @@ namespace Core.Raft.Canoe.Engine.States
                 /// <seealso cref="Section 5.4.2 Committing entries from previous terms"/>
                 /// </remarks>
 
-                while (VolatileState.CommitIndex > VolatileState.LastApplied)
+                while (indexToAssignAsCommitIndex > VolatileState.LastApplied)
                 {
                     try
                     {
 
                         ActivityLogger?.Log(new CoracleActivity
                         {
-                            Description = $"Updating Commit Index from {VolatileState.CommitIndex} to {newIndex}",
+                            Description = $"Updating Commit Index from {VolatileState.CommitIndex} to {indexToAssignAsCommitIndex}",
                             EntitySubject = AbstractStateEntity,
                             Event = CommitGreatherThanLastApplied,
                             Level = ActivityLogLevel.Debug,
@@ -153,7 +153,7 @@ namespace Core.Raft.Canoe.Engine.States
                         }
                         .With(ActivityParam.New(CommitIndex, VolatileState.CommitIndex))
                         .With(ActivityParam.New(LastApplied, VolatileState.LastApplied))
-                        .With(ActivityParam.New(NewCommitIndex, newIndex))
+                        .With(ActivityParam.New(NewCommitIndex, indexToAssignAsCommitIndex))
                         .WithCallerInfo());
 
                         VolatileState.LastApplied++;
@@ -172,26 +172,25 @@ namespace Core.Raft.Canoe.Engine.States
                         .With(ActivityParam.New(LogEntry, entryToApply))
                         .WithCallerInfo());
 
-                        if (entryToApply.IsEmpty || entryToApply.IsConfiguration || !entryToApply.IsExecutable)
+                        if (!entryToApply.Type.HasFlag(Logs.LogEntry.Types.Command))
                             continue;
 
                         var commandToApply = PersistentState.LogEntries.ReadFrom<ICommand>(commandLogEntry: entryToApply).GetAwaiter().GetResult();
 
-                        //TODO: Order should be enforced
-                        ClientRequestHandler.ExecuteAndApplyLogEntry(commandToApply).RunSynchronously();
+                        ClientRequestHandler.ExecuteAndApplyLogEntry(commandToApply);
                     }
                     catch (Exception ex)
                     {
                         ActivityLogger?.Log(new CoracleActivity
                         {
-                            Description = $"Caught during State Machine application for Commit Index {newIndex}",
+                            Description = $"Caught during State Machine application for Commit Index {indexToAssignAsCommitIndex}",
                             EntitySubject = AbstractStateEntity,
                             Event = ApplyingLogEntry,
                             Level = ActivityLogLevel.Error,
 
                         }
                         .With(ActivityParam.New(Exception, ex))
-                        .With(ActivityParam.New(NewCommitIndex, newIndex))
+                        .With(ActivityParam.New(NewCommitIndex, indexToAssignAsCommitIndex))
                         .WithCallerInfo());
                     }
                 }
@@ -199,7 +198,9 @@ namespace Core.Raft.Canoe.Engine.States
                 /// <remarks>
                 /// Finally Commit Index is updated. 
                 /// </remarks>
-                VolatileState.CommitIndex = newIndex;
+                /// 
+                // Just in case an earlier indexToAssign is supplied parallely. Better than assigning directly.
+                VolatileState.CommitIndex = Math.Max(indexToAssignAsCommitIndex, VolatileState.CommitIndex);
             }
         }
 

@@ -1,4 +1,5 @@
 ﻿using Core.Raft.Canoe.Engine.Configuration.Cluster;
+using System;
 
 namespace Core.Raft.Canoe.Engine.Logs
 {
@@ -25,23 +26,33 @@ namespace Core.Raft.Canoe.Engine.Logs
     public sealed class LogEntry
     {
         public object Contents { get; init; }
-        
-        /// <summary>
-        /// Signifies Contents as Empty - during No-Operation Log Entries, system will supply as null
-        /// </summary>
-        public bool IsEmpty { get; init; }
-
-        /// <summary>
-        /// Signifies that the underlying Contents denote a Command to be executed
-        /// </summary>
-        public bool IsExecutable { get; init; }
-
-        /// <summary>
-        /// Signifies that the underlying Contents are actually an enumerable of <see cref="NodeConfiguration"/> 
-        /// </summary>
-        public bool IsConfiguration { get; init; }
-
         public long Term { get; init; }
         public long CurrentIndex { get; init; }
+        public Types Type { get; init; }
+        
+        [Flags] public enum Types
+        {
+            /// <summary>
+            /// No contributions - empty in all fields
+            /// </summary>
+            None = 0,
+
+            /// <summary>
+            /// Signifies Contents as Empty.
+            /// Used during No-Operation Log Entries for whenever a <see cref="Canoe.Engine.States.Leader"/> is established.
+            /// </summary>
+            NoOperation = 1,
+
+            /// <summary>
+            /// Signifies that the underlying Contents denote a <see cref="Canoe.Engine.Command.ICommand"/> to be executed
+            /// </summary>
+            Command = 2,
+
+            /// <summary>
+            /// Signifies that the underlying Contents are actually an enumerable of <see cref="NodeConfiguration"/> 
+            /// </summary>
+            Configuration = 4,
+        }
     }
+
 }

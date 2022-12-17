@@ -26,8 +26,7 @@ namespace Core.Raft.Canoe.Engine.Actions.Contexts
         OnExternalRPCReceiveContextDependencies Dependencies { get; set; }
 
         public bool IsContextValid => !State.IsDisposed && !State.StateValue.IsAbandoned() && !State.StateValue.IsNotStarted();
-
-
+        internal bool TurnToFollower { get; set; } = false;
 
         #region Action Dependencies
         internal IEngineConfiguration EngineConfiguration => Dependencies.EngineConfiguration;

@@ -88,7 +88,7 @@ namespace Core.Raft.Canoe.Engine.Logs.CollectionStructure
         /// <param name="index"></param>
         /// <param name="logEntries"></param>
         /// <returns></returns>
-        Task AppendEntriesWithOverwrite(IEnumerable<LogEntry> logEntries);
+        Task OverwriteEntries(IEnumerable<LogEntry> logEntries);
 
         [Obsolete]
         Task<bool> DoesLogExistFor(long index, long term);
@@ -106,7 +106,7 @@ namespace Core.Raft.Canoe.Engine.Logs.CollectionStructure
         /// </summary>
         /// <typeparam name="TCommand"></typeparam>
         /// <param name="inputCommand"></param>
-        Task<LogEntry> AppendNewEntry<TCommand>(TCommand inputCommand) where TCommand : class, ICommand; //where TCommandResult : ClientHandlingResult, new();
+        Task<LogEntry> AppendNewCommandEntry<TCommand>(TCommand inputCommand) where TCommand : class, ICommand; //where TCommandResult : ClientHandlingResult, new();
 
 
         /// <remarks>

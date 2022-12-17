@@ -14,7 +14,7 @@ namespace Core.Raft.Canoe.Engine.Configuration
         public const string Entity = nameof(ClusterConfiguration);
         public const string NewUpdate = nameof(NewUpdate);
         public const string CurrentNodeNotPartOfCluster = nameof(CurrentNodeNotPartOfCluster);
-        public const string EventKey = nameof(EventKey);
+        public const string allNodeIds = nameof(allNodeIds);
 
         #endregion
 
@@ -35,16 +35,10 @@ namespace Core.Raft.Canoe.Engine.Configuration
         {
             get 
             {
-                var nodes = new List<NodeConfiguration>();
+                if (PeerMap == null) 
+                    return Enumerable.Empty<INodeConfiguration>();
 
-                nodes.Add(ThisNode.Clone() as NodeConfiguration);
-
-                foreach (var nodeConfig in PeerMap.Values)
-                {
-                    nodes.Add(nodeConfig.Clone() as NodeConfiguration);
-                }
-
-                return nodes;
+                return IsThisNodePartOfCluster ? PeerMap.Values.Append(ThisNode) : PeerMap.Values;
             }
         }
 
@@ -70,14 +64,6 @@ namespace Core.Raft.Canoe.Engine.Configuration
 
         public void UpdateConfiguration(string thisNodeId, IEnumerable<INodeConfiguration> clusterConfiguration)
         {
-            ActivityLogger?.Log(new CoracleActivity
-            {
-                EntitySubject = Entity,
-                Event = NewUpdate,
-                Level = ActivityLogLevel.Debug
-            }
-            .WithCallerInfo());
-
             var map = new ConcurrentDictionary<string, INodeConfiguration>();
             INodeConfiguration thisNode = null;
 
@@ -108,6 +94,15 @@ namespace Core.Raft.Canoe.Engine.Configuration
                 PeerMap = map;
                 ThisNode = thisNode;
             }
+
+            ActivityLogger?.Log(new CoracleActivity
+            {
+                EntitySubject = Entity,
+                Event = NewUpdate,
+                Level = ActivityLogLevel.Debug
+            }
+            .With(ActivityParam.New(allNodeIds, string.Join(' ', CurrentConfiguration.Select(_ => _.UniqueNodeId))))
+            .WithCallerInfo());
         }
     }
 }

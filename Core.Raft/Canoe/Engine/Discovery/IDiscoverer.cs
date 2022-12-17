@@ -6,38 +6,28 @@ using System.Threading.Tasks;
 namespace Core.Raft.Canoe.Engine.Discovery
 {
     /// <summary>
-    /// Implementation of this interface facilitates the storage and retrieval of all up and running Coracle Nodes.
-    /// Usually, an external Registar server holds this responsibility. 
-    /// However, it is possible for Coracle to adapt to a file-based configuration system if the implementation of this interface deals with configuration files.
+    /// <see cref="IDiscoverer"/> holds the methods, used by the <see cref="Canoe.Engine.Node.CanoeNode"/> internally, to get the list of <see cref="INodeConfiguration"/>, 
+    /// participating in the cluster. 
     /// 
+    /// The storage and retrieval of all up nodes could be maintained via configuration file based systems (or) a registry server.
+    /// 
+    /// The methods used, are called only when <see cref="Canoe.Engine.Node.ICanoeNode.IsStarted"/> is <c>false</c>.
     /// </summary>
     public interface IDiscoverer
     {
         /// <summary>
-        /// Enrolls current node to Node Registry Server for Service Discovery. 
-        /// <see cref="Core.Raft.Canoe.Engine.Discovery.Registrar.INodeRegistrar"/> to be implemented by Registry Server
+        /// Enrolls current node for Discovery. 
+        /// 
+        /// <see cref="Core.Raft.Canoe.Engine.Discovery.Registrar.INodeRegistrar"/> can help if implemented by Registry Server. 
+        /// For File-based configurations, it may not be necessary.
         /// </summary>
         Task<IDiscoveryOperation> EnrollThisNode(Uri registrarUri, INodeConfiguration configuration, CancellationToken cancellationToken);
 
         /// <summary>
-        /// Gets All Node info from Node Registry Server for Service Discovery. 
-        /// <see cref="Core.Raft.Canoe.Engine.Discovery.Registrar.INodeRegistrar"/> to be implemented by Registry Server
+        /// Fetches all node information from the File-based system (or) the Registry Server (if Service Discovery is implemented) 
+        /// 
+        /// <see cref="Core.Raft.Canoe.Engine.Discovery.Registrar.INodeRegistrar"/> can help if implemented by Registry Server. 
         /// </summary>
         Task<IDiscoveryOperation> GetAllNodes(Uri registrarUri, CancellationToken cancellationToken);
-
-        /// <summary>
-        /// Usually called explicitly, or by the Registry Server to indicate an updated configuration 
-        /// </summary>
-        Task RefreshDiscovery();
-
-        /// <summary>
-        /// The Service Discovery registar server should know that this Current Node is the Leader.
-        /// In case there any configuration changes, the Discovery Server should send the updated Configuration to this Node back.
-        /// </summary>
-        /// <param name="registrarUri"></param>
-        /// <param name="configuration"></param>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        Task<IDiscoveryOperation> NotifyCurrentNodeAsLeader(Uri registrarUri, INodeConfiguration configuration, CancellationToken cancellationToken);
     }
 }

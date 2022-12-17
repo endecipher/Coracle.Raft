@@ -11,6 +11,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Core.Raft.Canoe.Engine.States.LeaderState
@@ -32,12 +33,12 @@ namespace Core.Raft.Canoe.Engine.States.LeaderState
     {
         #region Constants
 
-        private const string Entity = nameof(AppendEntriesManager);
-        private const string Initiate = nameof(Initiate);
-        private const string Initializing = nameof(Initializing);
-        private const string NewConfigurationManagement = nameof(NewConfigurationManagement);
-        private const string nodesToAdd = nameof(nodesToAdd);
-        private const string nodesToRemove = nameof(nodesToRemove);
+        public const string Entity = nameof(AppendEntriesManager);
+        public const string Initiate = nameof(Initiate);
+        public const string Initializing = nameof(Initializing);
+        public const string NewConfigurationManagement = nameof(NewConfigurationManagement);
+        public const string nodesToAdd = nameof(nodesToAdd);
+        public const string nodesToRemove = nameof(nodesToRemove);
 
         #endregion
 
@@ -75,11 +76,40 @@ namespace Core.Raft.Canoe.Engine.States.LeaderState
         /// <summary>
         /// Last Successful Timings stored for each Server for informational purposes
         /// </summary>
-        ConcurrentDictionary<string, (INodeConfiguration NodeConfiguration, Information Information)> CurrentPeers { get; set; }
+        ConcurrentDictionary<string, NodeDetails> CurrentPeers { get; set; }
 
-        public struct Information
+        internal class NodeDetails
         {
+            public INodeConfiguration NodeConfiguration { get; init; }
             public DateTimeOffset LastPinged { get; set; }
+
+            public bool CanSend()
+            {
+                lock (_lock)
+                {
+                    if (IsRpcSent)
+                    {
+                        return false; //Since an ongoing outbound request already exists
+                    }
+                    else
+                    {
+                        IsRpcSent = true; // Marking for current request
+                        return true;
+                    }
+                }
+            }
+
+            private bool IsRpcSent = false;
+
+            public void OngoingRPCCompleted()
+            {
+                lock (_lock)
+                {
+                    IsRpcSent = false;
+                }
+            }
+
+            private object _lock = new object();
         }
 
         public void InitiateAppendEntries()
@@ -94,9 +124,9 @@ namespace Core.Raft.Canoe.Engine.States.LeaderState
 
             var state = CurrentStateAccessor.Get();
 
-            Parallel.ForEach(source: CurrentPeers.Values.Select(x=> x.NodeConfiguration), body: (nodeConfig) =>
+            Parallel.ForEach(source: CurrentPeers.Values, body: (nodeDetails) =>
             {
-                SendAppendEntriesToNode(nodeConfig, state);
+                SendAppendEntriesToNode(nodeDetails, state);
             },
             parallelOptions: new ParallelOptions
             {
@@ -104,9 +134,12 @@ namespace Core.Raft.Canoe.Engine.States.LeaderState
             });
         }
 
-        private void SendAppendEntriesToNode(INodeConfiguration nodeConfig, IChangingState state)
+        private void SendAppendEntriesToNode(NodeDetails nodeDetails, IChangingState state)
         {
-            var action = new OnSendAppendEntriesRPCLogs(input: nodeConfig, state, new OnSendAppendEntriesRPCContextDependencies
+            if (!nodeDetails.CanSend())
+                return;
+
+            var action = new OnSendAppendEntriesRPC(input: nodeDetails.NodeConfiguration, state, new OnSendAppendEntriesRPCContextDependencies
             {
                 EngineConfiguration = EngineConfiguration,
                 PersistentState = PersistentState,
@@ -129,12 +162,16 @@ namespace Core.Raft.Canoe.Engine.States.LeaderState
             }
             .WithCallerInfo());
 
-            CurrentPeers = new ConcurrentDictionary<string, (INodeConfiguration NodeConfiguration, Information Information)>();
+            CurrentPeers = new ConcurrentDictionary<string, NodeDetails>();
 
             /// Initializing to the earliest Time, since Ping not sent yet
             foreach (var config in ClusterConfiguration.Peers)
             {
-                CurrentPeers.TryAdd(config.UniqueNodeId, (config, new Information { LastPinged = DateTimeOffset.UnixEpoch }));
+                CurrentPeers.TryAdd(config.UniqueNodeId, new NodeDetails
+                {
+                    NodeConfiguration = config,
+                    LastPinged = DateTimeOffset.UnixEpoch
+                });
             }
         }
 
@@ -164,7 +201,11 @@ namespace Core.Raft.Canoe.Engine.States.LeaderState
 
             foreach (var node in serverIdsWhichHaveBeenAdded)
             {
-                CurrentPeers.TryAdd(node.Key, (node.Value, new Information { LastPinged = DateTimeOffset.UnixEpoch }));
+                CurrentPeers.TryAdd(node.Key, new NodeDetails
+                {
+                    NodeConfiguration = node.Value,
+                    LastPinged = DateTimeOffset.UnixEpoch
+                });
             }
 
             foreach (var nodeId in serverIdsWhichHaveBeenRemoved)
@@ -188,30 +229,42 @@ namespace Core.Raft.Canoe.Engine.States.LeaderState
             return CurrentPeers.ContainsKey(uniqueNodeId);
         }
 
+        // Called when an issue occurs
         public void IssueRetry(string uniqueNodeId)
         {
-            UpdateFor(uniqueNodeId);
+            MarkNextRequestToBeSent(uniqueNodeId);
 
             new Task(() =>
             {
                 if (CurrentPeers.TryGetValue(uniqueNodeId, out var result))
                 {
-                    SendAppendEntriesToNode(result.NodeConfiguration, CurrentStateAccessor.Get());
+                    SendAppendEntriesToNode(result, CurrentStateAccessor.Get());
                 }
             }).Start();
         }
 
+        // Called when Node has been communicated with successfully
         public void UpdateFor(string uniqueNodeId)
+        {
+            MarkNextRequestToBeSent(uniqueNodeId);
+
+            if (CurrentPeers.TryGetValue(uniqueNodeId, out var result))
+            {
+                result.LastPinged = DateTimeOffset.UtcNow;
+            }
+        }
+
+        private void MarkNextRequestToBeSent(string uniqueNodeId)
         {
             if (CurrentPeers.TryGetValue(uniqueNodeId, out var result))
             {
-                result.Information.LastPinged = DateTimeOffset.UtcNow;
+                result.OngoingRPCCompleted();
             }
         }
 
         public Dictionary<string, DateTimeOffset> FetchLastPinged()
         {
-            return CurrentPeers.ToDictionary(x => x.Key, y => y.Value.Information.LastPinged);
+            return CurrentPeers.ToDictionary(x => x.Key, y => y.Value.LastPinged);
         }
     }
 }

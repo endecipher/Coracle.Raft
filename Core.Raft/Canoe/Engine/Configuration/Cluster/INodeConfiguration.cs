@@ -2,7 +2,7 @@
 
 namespace Core.Raft.Canoe.Engine.Configuration.Cluster
 {
-    public interface INodeConfiguration : ICloneable
+    public interface INodeConfiguration 
     {
         public string UniqueNodeId { get; }
 

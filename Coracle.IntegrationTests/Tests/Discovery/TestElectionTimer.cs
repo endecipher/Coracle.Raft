@@ -1,27 +1,18 @@
 ﻿using Core.Raft.Canoe.Engine.Configuration.Cluster;
-using System;
-using System.Threading;
+using Core.Raft.Canoe.Engine.Helper;
 
-namespace Core.Raft.Canoe.Engine.Helper
+
+namespace Coracle.IntegrationTests.Framework
 {
-    internal sealed class ElectionTimer : IElectionTimer
+    internal class TestElectionTimer : IElectionTimer
     {
         IEngineConfiguration Config { get; }
 
         public Timer Timer = null;
 
-        public ElectionTimer(IEngineConfiguration engineConfiguration)
+        public TestElectionTimer(IEngineConfiguration engineConfiguration)
         {
             Config = engineConfiguration;
-        }
-
-        public IElectionTimer RegisterNew(TimerCallback timerCallback)
-        {
-            var timeOutInMilliseconds = Convert.ToInt32(RandomTimeout.TotalMilliseconds);
-
-            Timer = new Timer(timerCallback, null, timeOutInMilliseconds, timeOutInMilliseconds);
-
-            return this;
         }
 
         /// <summary>
@@ -45,6 +36,23 @@ namespace Core.Raft.Canoe.Engine.Helper
         public void Dispose()
         {
             Timer.Dispose();
+        }
+
+        public AwaitedLock AwaitedLock { get; set; } = new AwaitedLock();
+
+        public IElectionTimer RegisterNew(TimerCallback timerCallback)
+        {
+            var timeOutInMilliseconds = Convert.ToInt32(RandomTimeout.TotalMilliseconds);
+
+            var waitedCallback = new TimerCallback((state) =>
+            {
+                if (AwaitedLock.IsApproved())
+                    timerCallback.Invoke(state);
+            });
+
+            Timer = new Timer(waitedCallback, null, timeOutInMilliseconds, timeOutInMilliseconds);
+
+            return this;
         }
     }
 }

@@ -44,7 +44,7 @@ namespace Coracle.IntegrationTests.Components.PersistentData
                 Level = ActivityLogLevel.Debug,
             }
             .With(ActivityParam.New(CurrentTermValue, CurrentTerm))
-            .With(ActivityParam.New(VotedForValue, CurrentTerm))
+            .With(ActivityParam.New(VotedForValue, VotedFor))
             .WithCallerInfo());
         }
 

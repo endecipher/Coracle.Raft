@@ -9,7 +9,7 @@ namespace Core.Raft.Canoe.Engine.Remoting.RPC
 
         public bool Success { get; init; }
 
-        /// <summary>
+        /// <remarks>
         /// The following two additional properties are with respect to the below passage.
         /// 
         /// If desired, the protocol can be optimized to reduce the number of rejected AppendEntries RPCs.
@@ -18,10 +18,8 @@ namespace Core.Raft.Canoe.Engine.Remoting.RPC
         /// 
         /// With this information, the leader can decrement nextIndex to bypass all of the conflicting entries in that term; 
         /// one AppendEntries RPC will be required for each term with conflicting entries, rather than one RPC per entry.
-        /// 
-        /// Both are sent Null when No Entries are sent as part of the Request.
-        /// <see cref="Section 5.3 Log Replication"/>
-        /// </summary>
+        /// <seealso cref="Section 5.3 Log Replication"/>
+        /// </remarks>
         public long? ConflictingEntryTermOnFailure { get; init; }
 
         public long? FirstIndexOfConflictingEntryTermOnFailure { get; init; }

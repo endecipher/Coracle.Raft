@@ -1,5 +1,4 @@
 ﻿using ActivityLogger.Logging;
-using Core.Raft.Canoe.Engine.ActivityLogger;
 using Core.Raft.Canoe.Engine.Configuration;
 using Core.Raft.Canoe.Engine.Configuration.Cluster;
 using Core.Raft.Canoe.Engine.Discovery;
@@ -27,7 +26,7 @@ namespace Core.Raft.Canoe.Engine.Node
         IActivityLogger ActivityLogger { get; }
         IResponsibilities Responsibilities { get; }
         IDiscoverer Discoverer { get; }
-        IClusterConfiguration ClusterConfiguration { get; }
+        IClusterConfigurationChanger ClusterConfigurationChanger { get; }
         ICurrentStateAccessor CurrentStateAccessor { get; }
         IStateChanger StateChanger { get; }
         IEngineConfiguration EngineConfiguration { get; }
@@ -37,7 +36,7 @@ namespace Core.Raft.Canoe.Engine.Node
             IActivityLogger activityLogger, 
             IResponsibilities responsibilities, 
             IDiscoverer discoverer, 
-            IClusterConfiguration clusterConfiguration,
+            IClusterConfigurationChanger clusterConfigurationChanger,
             ICurrentStateAccessor currentStateAccessor,
             IStateChanger stateChanger,
             IEngineConfiguration engineConfiguration,
@@ -46,7 +45,7 @@ namespace Core.Raft.Canoe.Engine.Node
             ActivityLogger = activityLogger;
             Responsibilities = responsibilities;
             Discoverer = discoverer;
-            ClusterConfiguration = clusterConfiguration;
+            ClusterConfigurationChanger = clusterConfigurationChanger;
             CurrentStateAccessor = currentStateAccessor;
             StateChanger = stateChanger;
             EngineConfiguration = engineConfiguration;
@@ -63,10 +62,7 @@ namespace Core.Raft.Canoe.Engine.Node
 
         public void InitializeConfiguration()
         {
-            if (IsInitialized) throw new InvalidOperationException(nameof(IsInitialized) + "already true");
-
-            ////TODO: Remove the below, since TestRemoteManager needed to be tested
-            //var resp = ComponentContainer.Instance.GetInstance<IRemoteManager>().Send((IAppendEntriesRPC) null, null, CancellationToken.None).GetAwaiter().GetResult();
+            if (IsStarted) throw new InvalidOperationException(nameof(IsStarted) + "already true");
 
             IDiscoveryOperation operation = Discoverer.EnrollThisNode(EngineConfiguration.DiscoveryServerUri, new NodeConfiguration
             {
@@ -89,13 +85,16 @@ namespace Core.Raft.Canoe.Engine.Node
                     config.EventProcessorWaitTimeWhenQueueEmpty_InMilliseconds = EngineConfiguration.EventProcessorWaitTimeWhenQueueEmpty_InMilliseconds;
                     config.EventProcessorQueueSize = EngineConfiguration.EventProcessorQueueSize;
 
-                    ClusterConfiguration.UpdateConfiguration(EngineConfiguration.NodeId, operation.AllNodes);
+                    ClusterConfigurationChanger.ApplyConfiguration(new ClusterMembershipChange
+                    {
+                        Configuration = operation.AllNodes,
+                        ConfigurationLogEntryIndex = default,
+                    });
 
                     IsInitialized = true;
                     return;
                 }
             }
-
 
             throw operation.Exception;
         }
@@ -138,7 +137,5 @@ namespace Core.Raft.Canoe.Engine.Node
 
             CurrentStateAccessor.Get()?.Resume();
         }
-
-        
     }
 }

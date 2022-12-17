@@ -2,11 +2,10 @@
 using ActivityMonitoring.Assertions.Core;
 using Coracle.IntegrationTests.Components.ClientHandling.NoteCommand;
 using Coracle.IntegrationTests.Components.ClientHandling.Notes;
-using Coracle.IntegrationTests.Components.Logging;
-using Coracle.IntegrationTests.Components.Node;
 using Coracle.IntegrationTests.Components.PersistentData;
 using Coracle.IntegrationTests.Components.Remoting;
 using Core.Raft.Canoe.Engine.Actions;
+using Core.Raft.Canoe.Engine.Actions.Awaiters;
 using Core.Raft.Canoe.Engine.ClientHandling;
 using Core.Raft.Canoe.Engine.Configuration;
 using Core.Raft.Canoe.Engine.Configuration.Cluster;
@@ -14,211 +13,26 @@ using Core.Raft.Canoe.Engine.Discovery;
 using Core.Raft.Canoe.Engine.Discovery.Registrar;
 using Core.Raft.Canoe.Engine.Helper;
 using Core.Raft.Canoe.Engine.Node;
+using Core.Raft.Canoe.Engine.Remoting;
 using Core.Raft.Canoe.Engine.Remoting.RPC;
 using Core.Raft.Canoe.Engine.States;
+using Core.Raft.Canoe.Engine.States.LeaderState;
 using EventGuidance.Logging;
 using EventGuidance.Responsibilities;
 using FluentAssertions;
-using System.Collections.Concurrent;
 using Xunit;
 
 
 namespace Coracle.IntegrationTests.Framework
 {
-
-    public class AwaitedLock
-    {
-        protected object _lock = new object();
-        bool KeepApproving { get; set; } = false;
-
-        public AutoResetEvent AutoResetEvent = new AutoResetEvent(false);
-
-        //public IActionLock ContinueTesting = new ActionLock(canReset: true);
-
-        public void ApproveNext()
-        {
-            lock (_lock)
-            {
-                KeepApproving = true;
-            }
-
-            AutoResetEvent.WaitOne();
-        }
-
-        public bool IsApproved()
-        {
-            lock (_lock) {
-
-                if (KeepApproving)
-                {
-                    KeepApproving = false;
-                    AutoResetEvent.Set();
-                    return true;
-                }
-
-                return false; 
-            }
-        }
-    }
-
-    /// <summary>
-    /// Ok, so the thing is, there will be parallel requests from TestRemoteManager for each MockNode.
-    /// Once they reach that point, what we can do is, we can Wait() on a lock. Once main test thread Sets(), we reset().
-    /// But, the main testing thread should be allowed to program responses. Therefore, once wait() completes, and we reset(), we call GetResponse(), passing the Input.
-    /// The main testing thread can supply a list of operations in terms of funcs, and as the GetResponse is called, we can dequeue and execute.
-    /// 
-    /// </summary>
-    /// <typeparam name="TInput"></typeparam>
-    /// <typeparam name="TResponse"></typeparam>
-    public class RemoteAwaitedLock<TInput, TResponse> where TInput : class where TResponse : class
-    {
-        public ConcurrentQueue<(Func<TInput, object> program, ManualResetEventSlim approvalLock)> Programs { get; set; } = new ConcurrentQueue<(Func<TInput, object> program, ManualResetEventSlim approvalLock)>();
-
-        public ManualResetEventSlim Lock = new ManualResetEventSlim();
-
-        public ConcurrentQueue<(TInput input, object response)> RemoteCalls { get; set; } = new ConcurrentQueue<(TInput input, object response)> ();
-
-        public ManualResetEventSlim Enqueue(Func<TInput, object> func)
-        {
-            var @lock = new ManualResetEventSlim(false);
-            Programs.Enqueue((func, @lock));
-            return @lock;
-        }
-
-        public void ApproveNextInLine()
-        {
-            foreach (var (program, approvalLock) in Programs)
-            {
-                if (approvalLock.IsSet)
-                    continue;
-
-                approvalLock.Set();
-                break;
-            }
-        }
-        
-        public (TResponse response, Exception exception) WaitUntilResponse(TInput input)
-        {
-            if (Programs.TryDequeue(out var action))
-            {
-                action.approvalLock.Wait();
-                action.approvalLock.Reset();
-
-                var result = action.program.Invoke(input);
-
-                RemoteCalls.Enqueue((input, result));
-
-                if (result is Exception)
-                {
-                    return (null, (Exception) result);
-                }
-                else
-                {
-                    return ((TResponse) result, null);
-                }
-            }
-            else
-            {
-                Task.Delay(4000).Wait();
-            }
-            throw new InvalidOperationException($"No Programs Enqueued for {typeof(TInput).AssemblyQualifiedName} and {typeof(TResponse).AssemblyQualifiedName}");
-        }
-    }
-
-
-    //public class WaitedLocks
-    //{
-    //    private object _lock = new object();
-    //    int ActionCounter = 0;
-    //    int ApprovedCounter = 0;
-    //    public IEventLock Testing = new EventLock();
-
-    //    public void ApproveNext()
-    //    {
-    //        while (true)
-    //        {
-    //            lock (_lock)
-    //            {
-    //                if (LockCounters.Any())
-    //                {
-    //                    ApprovedCounter = LockCounters.Peek();
-    //                    LockCounters.Clear();
-    //                    break;
-    //                }
-    //            }
-
-    //            Thread.Sleep(500);
-    //        }
-
-    //        Testing.Wait();
-    //    }
-
-    //    public Stack<int> LockCounters { get; set; } = new Stack<int>();
-
-    //    public object RegisterNew()
-    //    {
-    //        lock (_lock) { LockCounters.Push(++ActionCounter); return ActionCounter; }
-    //    }
-
-    //    public bool IsApproved(object counter)
-    //    {
-    //        lock (_lock) { Testing.SignalDone(); return (Convert.ToInt32(counter) == ApprovedCounter);  }
-    //    }
-    //}
-
-    internal class TestElectionTimer : ElectionTimer
-    {
-        public AwaitedLock AwaitedLock { get; set; } = new AwaitedLock();
-
-        public TestElectionTimer(IEngineConfiguration engineConfiguration) : base(engineConfiguration)
-        {
-
-        }
-
-        public override IElectionTimer RegisterNew(TimerCallback timerCallback)
-        {
-            var timeOutInMilliseconds = Convert.ToInt32(RandomTimeout.TotalMilliseconds);
-
-            var waitedCallback = new TimerCallback((state) =>
-            {
-                if(AwaitedLock.IsApproved())
-                    timerCallback.Invoke(state);
-            });
-
-            Timer = new Timer(waitedCallback, null, timeOutInMilliseconds, timeOutInMilliseconds);
-
-            return this;
-        }
-    }
-
-    internal class TestHeartbeatTimer : HeartbeatTimer
-    {
-        public AwaitedLock AwaitedLock { get; set; } = new AwaitedLock();
-
-        public TestHeartbeatTimer(IEngineConfiguration engineConfiguration, IActivityLogger activityLogger) : base(engineConfiguration, activityLogger)
-        {
-
-        }
-
-        public override void RegisterNew(TimerCallback timerCallback)
-        {
-            var waitedCallback = new TimerCallback((state) =>
-            {
-                if (AwaitedLock.IsApproved())
-                    timerCallback.Invoke(state);
-            });
-
-            Timer = new Timer(waitedCallback, null, TimeOutInMilliseconds, TimeOutInMilliseconds);
-        }
-    }
-
-
     [TestCaseOrderer($"Coracle.IntegrationTests.Framework.{nameof(ExecutionOrderer)}", $"Coracle.IntegrationTests")]
     public class DiscoveryStageTesting : IClassFixture<TestContext>
     {
         const string TestingNodeId = "SUT";
         const string MockNodeIdA = "MockA";
         const string MockNodeIdB = "MockB";
+        const string NewNodeC = "NewNodeA";
+
         const int Seconds = 1000;
         const int MilliSeconds = 1;
         const int DecidedEventProcessorQueueSize = 49;
@@ -240,7 +54,7 @@ namespace Coracle.IntegrationTests.Framework
 #else
             ClientCommandTimeout_InMilliseconds = 500 * MilliSeconds,
 #endif
-            HeartbeatInterval_InMilliseconds = 30 * Seconds,
+            HeartbeatInterval_InMilliseconds = 5 * Seconds,
             SendAppendEntriesRPC_MaxSessionCapacity = 10,
 
             MinElectionTimeout_InMilliseconds = 19 * Seconds,
@@ -248,15 +62,28 @@ namespace Coracle.IntegrationTests.Framework
 
             //AppendEntries
             AppendEntriesEndpoint = null,
-            AppendEntriesTimeoutOnSend_InMilliseconds = 10 * Seconds,
-            AppendEntriesTimeoutOnReceive_InMilliseconds = 10 * Seconds,
+            AppendEntriesTimeoutOnSend_InMilliseconds = 1000 * Seconds,
+            AppendEntriesTimeoutOnReceive_InMilliseconds = 1000 * Seconds,
             SendAppendEntriesRPC_MaxRetryInfinityCounter = 20,
                 
             //RequestVote
             RequestVoteEndpoint = null,
-            RequestVoteTimeoutOnSend_InMilliseconds = 10 * Seconds,
-            RequestVoteTimeoutOnReceive_InMilliseconds = 10 * Seconds,
+            RequestVoteTimeoutOnSend_InMilliseconds = 1000 * Seconds,
+            RequestVoteTimeoutOnReceive_InMilliseconds = 1000 * Seconds,
             SendRequestVoteRPC_MaxRetryInfinityCounter = 20,
+
+            IncludeConfigurationChangeRequestInResults = true,
+            IncludeJointConsensusConfigurationInResults = true,
+            IncludeOriginalConfigurationInResults = true,
+
+            CatchUpOfNewNodesTimeout_InMilliseconds = 100 * Seconds,
+            CatchUpOfNewNodesWaitInterval_InMilliseconds = 10 * Seconds,
+
+            CatchupIntervalOnConfigurationChange_InMilliseconds = 1 * MilliSeconds,
+            CheckDepositionWaitInterval_InMilliseconds = 2 * Seconds,
+
+            EntryCommitWaitInterval_InMilliseconds = 2 * Seconds,
+            EntryCommitWaitTimeout_InMilliseconds = 1000 * Seconds
         };
         
         public DiscoveryStageTesting(TestContext context)
@@ -330,7 +157,7 @@ namespace Coracle.IntegrationTests.Framework
 
         [Fact]
         [Order(2)]
-        public async Task IsTriggeringReDiscoveryWorking()
+        public Task IsReInitializationWorking()
         {
 #region Arrange
 
@@ -345,13 +172,19 @@ namespace Coracle.IntegrationTests.Framework
 
             try
             {
-                await Context.GetService<INodeRegistrar>()
-                    .Enroll(Context.NodeContext.GetMockNode(MockNodeIdA).Configuration, CancellationToken.None);
+                Context.GetService<INodeRegistrar>().Enroll(new NodeConfiguration
+                {
+                    BaseUri = null,
+                    UniqueNodeId = MockNodeIdA
+                }, CancellationToken.None);
 
-                await Context.GetService<INodeRegistrar>()
-                    .Enroll(Context.NodeContext.GetMockNode(MockNodeIdB).Configuration, CancellationToken.None);
+                Context.GetService<INodeRegistrar>().Enroll(new NodeConfiguration
+                {
+                    BaseUri = null,
+                    UniqueNodeId = MockNodeIdB
+                }, CancellationToken.None);
 
-                await Context.GetService<IDiscoverer>().RefreshDiscovery();
+                Context.GetService<ICanoeNode>().InitializeConfiguration();
             }
             catch (Exception e)
             {
@@ -388,6 +221,7 @@ namespace Coracle.IntegrationTests.Framework
                 .ThisNode.UniqueNodeId
                 .Should().BeEquivalentTo(TestingNodeId, "- ThisNode details should not change");
 
+            return Task.CompletedTask;
 #endregion
         }
 
@@ -529,7 +363,7 @@ namespace Coracle.IntegrationTests.Framework
 
         [Fact]
         [Order(5)]
-        public void IsFollowerTurningToCandidateAndThenToLeader()
+        public async Task IsFollowerTurningToCandidateAndThenToLeader()
         {
             #region Arrange
 
@@ -542,17 +376,17 @@ namespace Coracle.IntegrationTests.Framework
                     x.Is(CurrentStateAccessor.StateHolderEntity, CurrentStateAccessor.StateChange)
                         && x.Has(CurrentStateAccessor.NewState, nameof(StateValues.Candidate))).RemoveOnceMatched();
 
-            //var termChanged = notifiableQueue
-            //    .AttachNotifier(x => x.Is(TestStateProperties.PersistentPropertiesEntity, TestStateProperties.IncrementedCurrentTerm));
+            var termChanged = notifiableQueue
+                .AttachNotifier(x => x.Is(TestStateProperties.PersistentPropertiesEntity, TestStateProperties.IncrementedCurrentTerm));
 
-            //var remoteCallMade = notifiableQueue
-            //    .AttachNotifier(x => x.Is(TestRemoteManager.TestRemoteManagerEntity, TestRemoteManager.OutboundRequestVoteRPC));
+            var remoteCallMade = notifiableQueue
+                .AttachNotifier(x => x.Is(TestRemoteManager.TestRemoteManagerEntity, TestRemoteManager.OutboundRequestVoteRPC));
 
-            //var sessionReceiveVote = notifiableQueue
-            //    .AttachNotifier(x => x.Is(ElectionSession.ElectionSessionEntity, ElectionSession.ReceivedVote));
+            var sessionReceiveVote = notifiableQueue
+                .AttachNotifier(x => x.Is(ElectionManager.Entity, ElectionManager.ReceivedVote));
 
-            //var majorityAttained = notifiableQueue
-            //    .AttachNotifier(x => x.Is(ElectionSession.ElectionSessionEntity, ElectionSession.MajorityAttained));
+            var majorityAttained = notifiableQueue
+                .AttachNotifier(x => x.Is(ElectionManager.Entity, ElectionManager.MajorityAttained));
 
             var leaderEstablished = notifiableQueue
                 .AttachNotifier(x => 
@@ -573,15 +407,32 @@ namespace Coracle.IntegrationTests.Framework
                 VoteGranted = true
             }, approveImmediately: true);
 
+            Note testNote = new Note
+            {
+                UniqueHeader = nameof(testNote),
+                Text = TestingNodeId,
+            };
+
+            AddNoteCommand testAddNoteCommand = new AddNoteCommand(testNote);
+
             #endregion
 
             #region Act
 
             Exception caughtException = null;
-            CaptureProperties captureAfterBecomingLeader = null;
+            ClientHandlingResult clientHandlingResult = null;
+
+            CaptureProperties 
+                captureAfterCandidacy = null, 
+                captureAfterLeader = null, 
+                captureAfterCommand = null, 
+                captureBeforeCandidacy = null, 
+                captureAfterSuccessfulAppendEntries = null;
 
             try
             {
+                captureBeforeCandidacy = new CaptureProperties(Context.GetService<ICurrentStateAccessor>().Get());
+
                 var electionTimer = Context.GetService<IElectionTimer>() as TestElectionTimer;
 
                 //This will make sure that the ElectionTimer callback invocation is approved for the Candidacy
@@ -591,16 +442,18 @@ namespace Coracle.IntegrationTests.Framework
                 candidateEstablished.Wait();
 
                 ////Wait until Term incremented
-                //termChanged.WaitAndRemove();
+                termChanged.Wait();
 
                 ////Wait until TestRemoteManager receives a call
-                //remoteCallMade.WaitAndRemove();
+                remoteCallMade.Wait();
+
+                captureAfterCandidacy = new CaptureProperties(Context.GetService<ICurrentStateAccessor>().Get());
 
                 ////Wait until ElectionSession receives a vote
-                //sessionReceiveVote.WaitAndRemove();
+                sessionReceiveVote.Wait();
 
                 ////Wait until Majority has been attained
-                //majorityAttained.WaitAndRemove();
+                majorityAttained.Wait();
 
                 var heartBeatTimer = Context.GetService<IHeartbeatTimer>() as TestHeartbeatTimer;
 
@@ -610,7 +463,7 @@ namespace Coracle.IntegrationTests.Framework
                 //Wait until current state is now Leader
                 leaderEstablished.Wait();
 
-                captureAfterBecomingLeader = new CaptureProperties(Context.GetService<ICurrentStateAccessor>().Get() as Leader);
+                captureAfterLeader = new CaptureProperties(Context.GetService<ICurrentStateAccessor>().Get());
 
                 var isPronouncedLeaderSelf = Context.GetService<ILeaderNodePronouncer>().IsLeaderRecognized 
                     && Context.GetService<ILeaderNodePronouncer>().RecognizedLeaderConfiguration.UniqueNodeId.Equals(TestingNodeId);
@@ -630,6 +483,29 @@ namespace Coracle.IntegrationTests.Framework
                     ConflictingEntryTermOnFailure = null,
                     Success = true
                 }, approveImmediately: true);
+
+                captureAfterSuccessfulAppendEntries = new CaptureProperties(Context.GetService<ICurrentStateAccessor>().Get());
+
+                Context.NodeContext.GetMockNode(MockNodeIdA).EnqueueNextAppendEntriesResponse(rpc => new AppendEntriesRPCResponse
+                {
+                    Term = rpc.Term,
+                    FirstIndexOfConflictingEntryTermOnFailure = null,
+                    ConflictingEntryTermOnFailure = null,
+                    Success = true
+                }, approveImmediately: true);
+
+                Context.NodeContext.GetMockNode(MockNodeIdB).EnqueueNextAppendEntriesResponse(rpc => new AppendEntriesRPCResponse
+                {
+                    Term = rpc.Term,
+                    FirstIndexOfConflictingEntryTermOnFailure = null,
+                    ConflictingEntryTermOnFailure = null,
+                    Success = true
+                }, approveImmediately: true);
+
+                clientHandlingResult = await Context.GetService<IExternalClientCommandHandler>()
+                    .HandleClientCommand(testAddNoteCommand, CancellationToken.None);
+
+                captureAfterCommand = new CaptureProperties(Context.GetService<ICurrentStateAccessor>().Get());
             }
             catch (Exception e)
             {
@@ -646,25 +522,511 @@ namespace Coracle.IntegrationTests.Framework
                 .Should().Be(null, $" ");
 
             candidateEstablished.IsConditionMatched.Should().BeTrue();
-            //termChanged.IsConditionMatched.Should().BeTrue();
-            //remoteCallMade.IsConditionMatched.Should().BeTrue();
-            //sessionReceiveVote.IsConditionMatched.Should().BeTrue();
-            //majorityAttained.IsConditionMatched.Should().BeTrue();
+            termChanged.IsConditionMatched.Should().BeTrue();
+            remoteCallMade.IsConditionMatched.Should().BeTrue();
+            sessionReceiveVote.IsConditionMatched.Should().BeTrue();
+            majorityAttained.IsConditionMatched.Should().BeTrue();
             leaderEstablished.IsConditionMatched.Should().BeTrue();
 
+            captureAfterCandidacy
+                .VotedFor
+                .Should().Be(TestingNodeId, "Because tduring candidacy, the candidate votes for itself");
 
-            captureAfterBecomingLeader
-                .CommitIndex
-                .Should().Be(0, "CommitIndex should be 0, since no logEntries yet");
-
-            captureAfterBecomingLeader
+            captureAfterCandidacy
                 .CurrentTerm
-                .Should().Be(0, "CommitIndex should be 0, since no logEntries yet");
+                .Should().Be(captureBeforeCandidacy.CurrentTerm + 1, "Since before candidacy, the term should be 1 lesser");
 
+            captureAfterLeader
+                .CommitIndex
+                .Should().Be(0, "CommitIndex should be zero, since no logEntries yet");
 
+            captureAfterLeader
+                .CurrentTerm
+                .Should().Be(captureAfterCandidacy.CurrentTerm, "Since Leader was elected in the candidacy election itself");
 
+            Context.GetService<INotes>()
+                .TryGet(testNote.UniqueHeader, out var note)
+                .Should().BeTrue();
+
+            note.Should().NotBeNull("Note must exist");
+
+            note.Text.Should().Be(testNote.Text, "Note should match the testNote supplied");
+
+            captureAfterCommand
+                .LastApplied
+                .Should().Be(captureAfterCommand.CommitIndex, "The command should be applied, and the lastApplied entry should be the same as the commitIndex");
+
+            captureAfterCommand
+                .MatchIndexes
+                .Values
+                .Should()
+                .Match((collection) => collection.All(index => index.Equals(captureAfterCommand.LastLogIndex)),
+                    $"{MockNodeIdA} and {MockNodeIdB} should have had replicated all entries up until the leader's last log index");
+
+            captureAfterCommand
+                .NextIndexes
+                .Values
+                .Should()
+                .Match((collection) => collection.All(index => index.Equals(captureAfterCommand.LastLogIndex + 1)), 
+                    $"{MockNodeIdA} and {MockNodeIdB} should have had replicated all entries up until the leader's last log index, and the nextIndex to send for each peer mock node should be one greater");
 
             monitor.RemoveContextQueue(notifiableQueue.Id);
+            #endregion
+        }
+
+        [Fact]
+        [Order(6)]
+        public async Task IsLeaderHandlingReadOnlyCommands()
+        {
+            #region Arrange
+
+            var monitor = Context.GetService<IActivityMonitor<Activity>>();
+
+            var notifiableQueue = monitor.Capture().All();
+
+            IAssertableQueue<Activity> assertableQueue;
+
+            var noteHeader = Context.GetService<INotes>().GetAllHeaders().First();
+            Context.GetService<INotes>().TryGet(noteHeader, out var existingNote);
+
+            GetNoteCommand testGetNodeCommand = new GetNoteCommand(noteHeader);
+
+            #endregion
+
+            #region Act
+
+            Exception caughtException = null;
+            ClientHandlingResult clientHandlingResult = null;
+            CaptureProperties captureAfterReadOnlyCommand = null, captureBeforeReadOnlyCommand = null;
+            try
+            {
+                captureBeforeReadOnlyCommand = new CaptureProperties(Context.GetService<ICurrentStateAccessor>().Get());
+                
+                Context.NodeContext.GetMockNode(MockNodeIdA).EnqueueNextAppendEntriesResponse(rpc => new AppendEntriesRPCResponse
+                {
+                    Term = rpc.Term,
+                    FirstIndexOfConflictingEntryTermOnFailure = null,
+                    ConflictingEntryTermOnFailure = null,
+                    Success = true
+                }, approveImmediately: true);
+
+                Context.NodeContext.GetMockNode(MockNodeIdB).EnqueueNextAppendEntriesResponse(rpc => new AppendEntriesRPCResponse
+                {
+                    Term = rpc.Term,
+                    FirstIndexOfConflictingEntryTermOnFailure = null,
+                    ConflictingEntryTermOnFailure = null,
+                    Success = true
+                }, approveImmediately: true);
+
+                clientHandlingResult = await Context.GetService<IExternalClientCommandHandler>()
+                    .HandleClientCommand(testGetNodeCommand, CancellationToken.None);
+
+                captureAfterReadOnlyCommand = new CaptureProperties(Context.GetService<ICurrentStateAccessor>().Get());
+            }
+            catch (Exception e)
+            {
+                caughtException = e;
+            }
+
+            assertableQueue = monitor.EndCapture(notifiableQueue.Id);
+
+            #endregion
+
+            #region Assert
+
+            caughtException
+                .Should().Be(null, $" ");
+
+            clientHandlingResult.CommandResult.Should().NotBeNull("Result must have the Note, since it exists");
+
+            clientHandlingResult.CommandResult.As<Note>().Text.Should().Be(existingNote.Text, "Note should match the existing object's text");
+
+            assertableQueue
+                .Dig()
+                .UntilItSatisfies(_ => _.Is(AppendEntriesManager.Entity, AppendEntriesManager.Initiate), "As client command processing should invoke a heartbeat to check if the state is still Leader, without the Heartbeat timer initiating");
+
+            assertableQueue
+                .Dig()
+                .UntilItSatisfies(_ => _.Is(GlobalAwaiter.Entity, GlobalAwaiter.AwaitingNoDeposition), "Node must check if it has been deposed before responding to read-only requests");
+
+
+            captureBeforeReadOnlyCommand
+                .CommitIndex
+                .Should().Be(captureAfterReadOnlyCommand.CommitIndex, "Since Read-only request, the CommitIndex should remain same since nothing should be applied");
+
+            captureBeforeReadOnlyCommand
+                .MatchIndexes[MockNodeIdA]
+                .Should()
+                .Be(captureAfterReadOnlyCommand.MatchIndexes[MockNodeIdA], "Since a Read-Only Command does not append Entries, the MatchIndex must remain the same as before");
+
+            captureBeforeReadOnlyCommand
+                .MatchIndexes[MockNodeIdB]
+                .Should()
+                .Be(captureAfterReadOnlyCommand.MatchIndexes[MockNodeIdB], "Since a Read-Only Command does not append Entries, the MatchIndex must remain the same as before");
+
+            monitor.RemoveContextQueue(notifiableQueue.Id);
+            #endregion
+        }
+
+        [Fact]
+        [Order(7)]
+        public async Task IsLeaderDenyingAppendEntriesAndRequestVote()
+        {
+            #region Arrange
+
+            var monitor = Context.GetService<IActivityMonitor<Activity>>();
+
+            var notifiableQueue = monitor.Capture().All();
+
+            IAssertableQueue<Activity> assertableQueue;
+
+            var previousTerm = await Context.GetService<IPersistentProperties>().GetCurrentTerm() - 1;
+            var lastLogIndexOfPrevTerm = await Context.GetService<IPersistentProperties>().LogEntries.GetLastIndexForTerm(previousTerm);
+            var incompleteLogEntries = await Context.GetService<IPersistentProperties>().LogEntries.FetchLogEntriesBetween(0, lastLogIndexOfPrevTerm);
+
+            #endregion
+
+            #region Act
+
+            Exception caughtException = null;
+            Core.Raft.Canoe.Engine.Operational.Operation<IRequestVoteRPCResponse> requestVoteResponse = null;
+            Core.Raft.Canoe.Engine.Operational.Operation<IAppendEntriesRPCResponse> appendEntriesResponse = null;
+
+            try
+            {
+                requestVoteResponse = await Context.GetService<IExternalRpcHandler>().RespondTo(new RequestVoteRPC()
+                {
+                    CandidateId = MockNodeIdA,
+                    LastLogIndex = lastLogIndexOfPrevTerm,
+                    LastLogTerm = previousTerm,
+                    Term = previousTerm
+                }, CancellationToken.None);
+
+                appendEntriesResponse = await Context.GetService<IExternalRpcHandler>().RespondTo(new AppendEntriesRPC(incompleteLogEntries)
+                {
+                    LeaderId = MockNodeIdA,
+                    LeaderCommitIndex = lastLogIndexOfPrevTerm,
+                    Term = previousTerm,
+                    PreviousLogIndex = incompleteLogEntries.Last().CurrentIndex,
+                    PreviousLogTerm = incompleteLogEntries.Last().Term,
+                }, CancellationToken.None);
+            }
+            catch (Exception e)
+            {
+                caughtException = e;
+            }
+
+            assertableQueue = monitor.EndCapture(notifiableQueue.Id);
+
+            #endregion
+
+            #region Assert
+
+            caughtException
+                .Should().Be(null, $" ");
+
+            requestVoteResponse
+                .HasResponse
+                .Should().BeTrue("There must be some response");
+
+            requestVoteResponse
+                .Response
+                .VoteGranted
+                .Should().BeFalse("Vote must not be granted, as the Term sent is earlier");
+
+            requestVoteResponse
+                .Response
+                .Term
+                .Should().BeGreaterThan(previousTerm, "Since the term sent back is greater");
+
+            appendEntriesResponse
+                .HasResponse
+                .Should().BeTrue("There must be some response");
+
+            appendEntriesResponse
+                .Response
+                .Success
+                .Should().BeFalse("Since entries do not overlap already present entries");
+
+            appendEntriesResponse
+                .Response
+                .Term
+                .Should().BeGreaterThan(previousTerm, "Since the term sent back is greater");
+
+            assertableQueue
+                .Dig()
+                .UntilItSatisfies(_ => _.Is(OnExternalRequestVoteRPCReceive.ActionName, OnExternalRequestVoteRPCReceive.DeniedDueToLesserTerm), "The denial should be stemmed from this event");
+
+            assertableQueue
+                .Dig()
+                .UntilItSatisfies(_ => _.Is(OnExternalAppendEntriesRPCReceive.ActionName, OnExternalAppendEntriesRPCReceive.DeniedAppendEntries), "The denial should be stemmed from this event");
+
+            monitor.RemoveContextQueue(notifiableQueue.Id);
+            #endregion
+        }
+
+        [Fact]
+        [Order(8)]
+        public async Task IsLeaderHandlingConfigurationChange()
+        {
+            #region Arrange
+
+            var monitor = Context.GetService<IActivityMonitor<Activity>>();
+
+            var notifiableQueue = monitor.Capture().All();
+
+            var candidateEstablished = notifiableQueue
+                .AttachNotifier(x =>
+                    x.Is(CurrentStateAccessor.StateHolderEntity, CurrentStateAccessor.StateChange)
+                        && x.Has(CurrentStateAccessor.NewState, nameof(StateValues.Candidate))).RemoveOnceMatched();
+
+            IAssertableQueue<Activity> assertableQueue;
+
+            var currentConfiguration = Context.GetService<IClusterConfiguration>().CurrentConfiguration;
+
+            var newConfiguration = currentConfiguration.Select(x => new NodeConfiguration
+            {
+                UniqueNodeId = x.UniqueNodeId
+
+            }).Append(new NodeConfiguration
+            {
+                UniqueNodeId = NewNodeC //Adding NewNodeC
+
+            }).Where(x=> !x.UniqueNodeId.Equals(MockNodeIdB)) //Removing MockNodeIdB
+            .ToList();
+
+            Context.NodeContext.CreateMockNode(NewNodeC);
+
+            #endregion
+
+            #region Act
+
+            Exception caughtException = null;
+            ConfigurationChangeResult changeResult = null;
+
+            try
+            {
+                Context.NodeContext.GetMockNode(MockNodeIdA).EnqueueNextAppendEntriesResponse(rpc => new AppendEntriesRPCResponse
+                {
+                    Term = rpc.Term,
+                    FirstIndexOfConflictingEntryTermOnFailure = null,
+                    ConflictingEntryTermOnFailure = null,
+                    Success = true
+                }, approveImmediately: true);
+
+                Context.NodeContext.GetMockNode(MockNodeIdB).EnqueueNextAppendEntriesResponse(rpc => new AppendEntriesRPCResponse
+                {
+                    Term = rpc.Term,
+                    FirstIndexOfConflictingEntryTermOnFailure = null,
+                    ConflictingEntryTermOnFailure = null,
+                    Success = true
+                }, approveImmediately: true);
+
+                // New Node may respond with Success false, as it has just started up and needs replication
+                Context.NodeContext.GetMockNode(NewNodeC).EnqueueNextAppendEntriesResponse(rpc => new AppendEntriesRPCResponse
+                {
+                    Term = rpc.Term,
+                    FirstIndexOfConflictingEntryTermOnFailure = rpc.PreviousLogIndex,
+                    ConflictingEntryTermOnFailure = rpc.PreviousLogTerm,
+                    Success = false
+                }, approveImmediately: true);
+
+                // Next time, it sends true
+                Context.NodeContext.GetMockNode(NewNodeC).EnqueueNextAppendEntriesResponse(rpc => new AppendEntriesRPCResponse
+                {
+                    Term = rpc.Term,
+                    FirstIndexOfConflictingEntryTermOnFailure = null,
+                    ConflictingEntryTermOnFailure = null,
+                    Success = true
+                }, approveImmediately: true);
+
+                changeResult = await Context.GetService<IExternalConfigurationChangeHandler>().IssueConfigurationChange(new ConfigurationChangeRPC
+                {
+                    UniqueId = Guid.NewGuid().ToString(),
+                    NewConfiguration = newConfiguration
+
+                }, CancellationToken.None);
+            }
+            catch (Exception e)
+            {
+                caughtException = e;
+            }
+
+            #endregion
+
+            #region Assert
+
+            assertableQueue = monitor.EndCapture(notifiableQueue.Id);
+
+            caughtException
+                .Should().Be(null, $" ");
+
+            assertableQueue
+                .Dig()
+                .UntilItSatisfies(_ => _.Is(ClusterConfiguration.Entity, ClusterConfiguration.NewUpdate)
+                    && _.HasMatchingParam(ClusterConfiguration.allNodeIds, param => param.ToString().ContainsThese(TestingNodeId, MockNodeIdA, MockNodeIdB, NewNodeC)),
+                        $"Joint Consensus should account for the new {NewNodeC} and all other existing nodes");
+
+            assertableQueue
+                .Dig()
+                .UntilItSatisfies(_ => _.Is(AppendEntriesManager.Entity, AppendEntriesManager.NewConfigurationManagement) 
+                    && _.HasMatchingParam(AppendEntriesManager.nodesToAdd, param => param.ToString().Contains(NewNodeC) && param.ToString().DoesNotContainThese(MockNodeIdA, MockNodeIdB, TestingNodeId))
+                        && _.HasMatchingParam(AppendEntriesManager.nodesToRemove, param => param.ToString().DoesNotContainThese(MockNodeIdA, MockNodeIdB, TestingNodeId, NewNodeC)), 
+                        $"Joint Consensus should account for the new {NewNodeC} only, but should not remove {MockNodeIdB} or any other node");
+
+            assertableQueue
+                .Search()
+                .UntilItSatisfies(_ => _.Is(LeaderVolatileProperties.Entity, LeaderVolatileProperties.DecrementedNextIndexToFirstIndexOfPriorValidTerm)
+                    && _.HasMatchingParam(LeaderVolatileProperties.nodeId, param => param.ToString().ContainsThese(NewNodeC)),
+                        $"Since entries are not yet replicated to the {NewNodeC}, the NextIndex must be decremented accordingly");
+
+            assertableQueue
+                .Search()
+                .UntilItSatisfies(_ => _.Is(OnCatchUpOfNewlyAddedNodes.ActionName, OnCatchUpOfNewlyAddedNodes.NodesNotCaughtUpYet)
+                    && _.HasMatchingParam(OnCatchUpOfNewlyAddedNodes.nodesToCheck, param => param.ToString().ContainsThese(NewNodeC)
+                            && param.ToString().DoesNotContainThese(MockNodeIdA, MockNodeIdB, TestingNodeId)),
+                        $"Catchup awaiting should only occur for {NewNodeC}, and not other nodes");
+
+            assertableQueue
+                .Search()
+                .UntilItSatisfies(_ => _.Is(OnSendAppendEntriesRPC.ActionName, OnSendAppendEntriesRPC.SendingOnFailure),
+                        $"Catchup awaiting should only occur for {NewNodeC}, and not other nodes");
+
+            assertableQueue
+                .Dig()
+                .UntilItSatisfies(_ => _.Is(OnCatchUpOfNewlyAddedNodes.ActionName, OnCatchUpOfNewlyAddedNodes.NodesCaughtUp)
+                    && _.HasMatchingParam(OnCatchUpOfNewlyAddedNodes.nodesToCheck, param => param.ToString().ContainsThese(NewNodeC) 
+                            && param.ToString().DoesNotContainThese(MockNodeIdA, MockNodeIdB, TestingNodeId)),
+                        $"Catchup awaiting should only occur for {NewNodeC}, and not other nodes");
+
+            Context.NodeContext.GetMockNode(NewNodeC).AppendEntriesLock
+                .RemoteCalls.Last().input.Entries.Last().Contents.As<IEnumerable<NodeConfiguration>>()
+                    .Should().Match(configs => string.Join(' ', configs.Select(x => x.UniqueNodeId))
+                        .ContainsThese(TestingNodeId, MockNodeIdA, MockNodeIdB, NewNodeC), 
+                            $"All node Ids must be present in the Joint Consensus Configuration entry sent to the new Node as well ");
+
+            assertableQueue
+                .Dig()
+                .UntilItSatisfies(_ => _.Is(ClusterConfiguration.Entity, ClusterConfiguration.NewUpdate)
+                    && _.HasMatchingParam(ClusterConfiguration.allNodeIds, param => param.ToString().ContainsThese(TestingNodeId, MockNodeIdA, NewNodeC) 
+                        && param.ToString().DoesNotContainThese(MockNodeIdB)),
+                        $"Target Configuration should have the new {NewNodeC} and all other existing nodes except {MockNodeIdB}");
+
+            assertableQueue
+                .Dig()
+                .UntilItSatisfies(_ => _.Is(AppendEntriesManager.Entity, AppendEntriesManager.NewConfigurationManagement)
+                    && _.HasMatchingParam(AppendEntriesManager.nodesToAdd, param => param.ToString().DoesNotContainThese(MockNodeIdA, MockNodeIdB, TestingNodeId, NewNodeC))
+                        && _.HasMatchingParam(AppendEntriesManager.nodesToRemove, param => param.ToString().Contains(MockNodeIdB) && param.ToString().DoesNotContainThese(MockNodeIdA, TestingNodeId, NewNodeC)),
+                        $"When the Configuration Change is handled again by a downstream module, they will just remove {MockNodeIdB}. ");
+
+            assertableQueue
+                .Dig()
+                .UntilItSatisfies(_ => _.Is(OnConfigurationChangeRequestReceive.ActionName, OnConfigurationChangeRequestReceive.ConfigurationChangeSuccessful),
+                        $"New Target Configuration Log Entry should be successfully changed");
+            #endregion
+        }
+
+        [Fact]
+        [Order(9)]
+        public async Task IsLeaderChangingToFollowerForGreaterTermRPC()
+        {
+            #region Arrange
+
+            var monitor = Context.GetService<IActivityMonitor<Activity>>();
+
+            var notifiableQueue = monitor.Capture().All();
+
+            var termChanged = notifiableQueue
+                .AttachNotifier(x => x.Is(TestStateProperties.PersistentPropertiesEntity, TestStateProperties.SetCurrentTermExternally));
+
+            var followerEstablished = notifiableQueue
+                .AttachNotifier(x =>
+                    x.Is(CurrentStateAccessor.StateHolderEntity, CurrentStateAccessor.StateChange)
+                        && x.Has(CurrentStateAccessor.NewState, nameof(StateValues.Follower))).RemoveOnceMatched();
+
+            IAssertableQueue<Activity> assertableQueue;
+
+            var currentTerm = await Context.GetService<IPersistentProperties>().GetCurrentTerm();
+            var lastLogIndexOfCurrentTerm = await Context.GetService<IPersistentProperties>().LogEntries.GetLastIndex();
+
+            #endregion
+
+            #region Act
+
+            Exception caughtException = null;
+            Core.Raft.Canoe.Engine.Operational.Operation<IRequestVoteRPCResponse> requestVoteResponse = null;
+
+            try
+            {
+                requestVoteResponse = await Context.GetService<IExternalRpcHandler>().RespondTo(new RequestVoteRPC()
+                {
+                    CandidateId = MockNodeIdA,
+                    LastLogIndex = lastLogIndexOfCurrentTerm + 1,
+                    LastLogTerm = currentTerm,
+                    Term = currentTerm + 1
+                }, CancellationToken.None);
+
+                termChanged.Wait();
+
+                followerEstablished.Wait();
+            }
+            catch (Exception e)
+            {
+                caughtException = e;
+            }
+
+            #endregion
+
+            #region Assert
+
+            assertableQueue = monitor.EndCapture(notifiableQueue.Id);
+
+            caughtException
+                .Should().Be(null, $" ");
+
+            termChanged.IsConditionMatched.Should().BeTrue();
+
+            assertableQueue
+                .Dig()
+                .UntilItSatisfies(_ => _.Is(OnExternalRequestVoteRPCReceive.ActionName, OnExternalRequestVoteRPCReceive.RevertingToFollower), "Leader should become a follower, as it has encountered a greater term");
+
+            Context.GetService<IPersistentProperties>().GetCurrentTerm().GetAwaiter().GetResult()
+                .Should()
+                .BeGreaterThan(currentTerm, "As Term must be set to the bigger Term (if encountered) from Request/Response");
+
+            followerEstablished.IsConditionMatched.Should().BeTrue();
+            #endregion
+        }
+
+        [Fact]
+        [Order(int.MaxValue)]
+        public async Task TestTemplateMethod2()
+        {
+            #region Arrange
+
+
+
+            #endregion
+
+            #region Act
+
+            Exception caughtException = null;
+
+            try
+            {
+            }
+            catch (Exception e)
+            {
+                caughtException = e;
+            }
+
+            #endregion
+
+            #region Assert
+
+            caughtException
+                .Should().Be(null, $" ");
+
             #endregion
         }
 
@@ -699,6 +1061,59 @@ namespace Coracle.IntegrationTests.Framework
 
 #endregion
         }
+
+        private Note GetTestNote(string header = null)
+        {
+            string testNote = nameof(testNote);
+
+            return new Note
+            {
+                UniqueHeader = header ?? testNote,
+                Text = TestingNodeId,
+            };
+        }
+
+        public class CaptureProperties
+        {
+            public StateValues StateValue { get; set; }
+            public long CurrentTerm { get; private set; }
+            public string VotedFor { get; private set; }
+            public long CommitIndex { get; set; }
+            public long LastApplied { get; set; }
+            public long LastLogIndex { get; set; }
+            public IDictionary<string, long> MatchIndexes { get; set; } = new Dictionary<string, long>();
+            public IDictionary<string, long> NextIndexes { get; set; } = new Dictionary<string, long>();
+
+            internal CaptureProperties(IChangingState state)
+            {
+                StateValue = state.StateValue;
+
+                CurrentTerm = (state as IStateDependencies).PersistentState.GetCurrentTerm().GetAwaiter().GetResult();
+                VotedFor = (state as IStateDependencies).PersistentState.GetVotedFor().GetAwaiter().GetResult();
+
+                CommitIndex = state.VolatileState.CommitIndex;
+                LastApplied = state.VolatileState.LastApplied;
+
+                LastLogIndex = (state as IStateDependencies).PersistentState.LogEntries.GetLastIndex().GetAwaiter().GetResult();
+
+                if (state is Leader leader)
+                {
+                    long matchIndex, nextIndex;
+
+                    leader.LeaderProperties.TryGetMatchIndex(MockNodeIdA, out matchIndex);
+                    MatchIndexes.Add(MockNodeIdA, matchIndex);
+
+                    leader.LeaderProperties.TryGetMatchIndex(MockNodeIdB, out matchIndex);
+                    MatchIndexes.Add(MockNodeIdB, matchIndex);
+
+                    leader.LeaderProperties.TryGetNextIndex(MockNodeIdA, out nextIndex);
+                    NextIndexes.Add(MockNodeIdA, nextIndex);
+
+                    leader.LeaderProperties.TryGetNextIndex(MockNodeIdB, out nextIndex);
+                    NextIndexes.Add(MockNodeIdB, nextIndex);
+                }
+            }
+        }
     }
 
     public static class ActivityMatchingExtensions
@@ -712,41 +1127,36 @@ namespace Coracle.IntegrationTests.Framework
         {
             return e.Parameters.Any(x=> x.Name.Equals(paramKey) && x.Value.Equals(paramValue));
         }
-    }
 
-    public class CaptureProperties
-    {
-        public StateValues StateValue { get; set; }
-        public long CurrentTerm { get; private set; }
-        public string VotedFor { get; private set; }
-        public long CommitIndex { get; set; }
-        public long LastApplied { get; set; }
-
-        public IDictionary<string, long> MatchIndexes { get; set; } = new Dictionary<string, long>();
-        public IDictionary<string, long> NextIndexes { get; set; } = new Dictionary<string, long>();
-
-        internal CaptureProperties(IChangingState state)
+        public static bool HasMatchingParam(this Activity e, string paramKey, Func<object, bool> paramValuePredicate)
         {
-            StateValue = state.StateValue;
+            return e.Parameters.Any(x => x.Name.Equals(paramKey) && paramValuePredicate.Invoke(x.Value));
+        }
 
-            CurrentTerm = (state as IStateDependencies).PersistentState.GetCurrentTerm().GetAwaiter().GetResult();
-            VotedFor = (state as IStateDependencies).PersistentState.GetVotedFor().GetAwaiter().GetResult();
+        public static bool ContainsThese(this string paramVal, params string[] args)
+        {
+            bool matchesAll = true;
 
-            CommitIndex = state.VolatileState.CommitIndex;
-            LastApplied = state.VolatileState.LastApplied;
-
-            if (state is Leader leader)
+            foreach (var str in args)
             {
-                foreach (var item in leader.LeaderProperties.NextIndexForServers)
-                {
-                    NextIndexes.Add(item.Key, item.Value);
-                }
-
-                foreach (var item in leader.LeaderProperties.MatchIndexForServers)
-                {
-                    MatchIndexes.Add(item.Key, item.Value);
-                }
+                matchesAll &= paramVal.Contains(str);
             }
+
+            return matchesAll;
+        }
+
+        public static bool DoesNotContainThese(this string paramVal, params string[] args)
+        {
+            bool matchesAll = true;
+
+            foreach (var str in args)
+            {
+                matchesAll &= !paramVal.Contains(str);
+            }
+
+            return matchesAll;
         }
     }
+
+    
 }
