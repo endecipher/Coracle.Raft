@@ -1,6 +1,6 @@
-﻿using Core.Raft.Canoe.Engine.Configuration.Cluster;
-using Core.Raft.Canoe.Engine.Discovery;
-using Core.Raft.Canoe.Engine.Discovery.Registrar;
+﻿using Coracle.Raft.Engine.Configuration.Cluster;
+using Coracle.Raft.Engine.Discovery;
+using Coracle.Raft.Engine.Discovery.Registrar;
 
 namespace Coracle.IntegrationTests.Components.Discovery
 {

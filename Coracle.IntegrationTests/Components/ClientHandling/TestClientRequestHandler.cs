@@ -1,9 +1,9 @@
-﻿using Core.Raft.Canoe.Engine.ClientHandling;
-using Core.Raft.Canoe.Engine.Command;
-using Core.Raft.Canoe.Engine.Configuration.Cluster;
-using ActivityLogger.Logging;
+﻿using ActivityLogger.Logging;
 using Coracle.IntegrationTests.Components.ClientHandling.Notes;
 using Coracle.IntegrationTests.Components.Logging;
+using Coracle.Raft.Engine.ClientHandling;
+using Coracle.Raft.Engine.ClientHandling.Command;
+using Coracle.Raft.Engine.Configuration.Cluster;
 
 namespace Coracle.IntegrationTests.Components.ClientHandling
 {

@@ -1,6 +1,5 @@
-﻿using Core.Raft.Canoe.Engine.Configuration.Cluster;
-using Core.Raft.Canoe.Engine.Helper;
-
+﻿using Coracle.Raft.Engine.Configuration.Cluster;
+using Coracle.Raft.Engine.Helper;
 
 namespace Coracle.IntegrationTests.Framework
 {

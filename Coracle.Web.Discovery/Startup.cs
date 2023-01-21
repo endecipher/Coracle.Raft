@@ -1,7 +1,7 @@
 using ActivityLogger.Logging;
+using Coracle.Raft.Engine.Discovery.Registrar;
 using Coracle.Web.Discovery.Coracle.Logging;
 using Coracle.Web.Discovery.Coracle.Registrar;
-using Core.Raft.Canoe.Engine.Discovery.Registrar;
 using CorrelationId.DependencyInjection;
 
 namespace Coracle.Web.Discovery
@@ -40,12 +40,6 @@ namespace Coracle.Web.Discovery
             //services.AddDefaultCorrelationId();
 
             services.AddMvc();//.AddRazorRuntimeCompilation();
-
-            //var container = new StructureMapContainer();
-            //container.Initialize();
-            //container.Populate(services);
-            //container.Scan();
-            //ComponentContainer.Instance = container;
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
@@ -69,17 +63,13 @@ namespace Coracle.Web.Discovery
 
             app.UseEndpoints(endpoints =>
             {
-                //endpoints.MapHub<LogHub>("/logHub");
-
+                //endpoints.MapDefaultControllerRoute();
                 //endpoints.MapControllers();
 
-                endpoints.MapDefaultControllerRoute();
-                //endpoints.MapControllers();
-
-                //endpoints.MapControllerRoute(
-                //    name: "default",
-                //    pattern: "{controller=Home}/{action=Index}/{id?}"
-                //);
+                endpoints.MapControllerRoute(
+                    name: "default",
+                    pattern: "{controller=Discovery}/{action=Get}/"
+                );
             });
         }
     }

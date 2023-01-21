@@ -3,13 +3,8 @@ using Coracle.IntegrationTests.Components.Discovery;
 using Coracle.IntegrationTests.Components.Logging;
 using Coracle.IntegrationTests.Components.Registries;
 using Coracle.IntegrationTests.Components.Remoting;
-using Core.Raft.Canoe.Engine.Configuration;
-using Core.Raft.Canoe.Engine.Configuration.Cluster;
-using Core.Raft.Canoe.Engine.Discovery;
-using Core.Raft.Canoe.Engine.Node;
-using Core.Raft.Canoe.Engine.Remoting;
-using EventGuidance.Dependency;
-using EventGuidance.Logging;
+using Coracle.Raft.Engine.Configuration.Cluster;
+using Coracle.Raft.Engine.Node;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
 
@@ -52,7 +47,7 @@ namespace Coracle.IntegrationTests.Components.Node
         /// <remarks>
         /// .NET DI Services and StructureMap jugalbandi
         /// </remarks>
-        public TestCoracleNodeAccessor(IAppInfo appInfo, IEngineConfiguration engineConfig, IOptions<ContainerRegistryOptions> options, ICanoeNode node)
+        public TestCoracleNodeAccessor(IAppInfo appInfo, IEngineConfiguration engineConfig, ICanoeNode node)
         {
             (engineConfig as EngineConfigurationSettings).ThisNodeUri = appInfo.GetCurrentAppUri();
             

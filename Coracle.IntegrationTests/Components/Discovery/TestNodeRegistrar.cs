@@ -1,8 +1,9 @@
 ﻿using ActivityLogger.Logging;
 using Coracle.IntegrationTests.Components.Logging;
-using Core.Raft.Canoe.Engine.Configuration.Cluster;
-using Core.Raft.Canoe.Engine.Discovery;
-using Core.Raft.Canoe.Engine.Discovery.Registrar;
+using Coracle.Raft.Engine.Configuration.Cluster;
+using Coracle.Raft.Engine.Discovery;
+using Coracle.Raft.Engine.Discovery.Registrar;
+using Coracle.Samples.Logging;
 
 namespace Coracle.IntegrationTests.Components.Discovery
 {
@@ -34,25 +35,14 @@ namespace Coracle.IntegrationTests.Components.Discovery
         /// </summary>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public async Task AlertAllNodesForRefresh(CancellationToken cancellationToken)
+        public async Task Clear()
         {
-            //var allNodes = await NodeRegistry.GetAll();
+            var allNodes = await NodeRegistry.GetAll();
 
-            //ActivityLogger?.Log(new ImplActivity
-            //{
-            //    EntitySubject = NodeRegistrarEntity,
-            //    Event = AlertingAll,
-            //    Level = ActivityLogLevel.Debug,
-            //}
-            //.With(ActivityParam.New(Nodes, allNodes))
-            //.WithCallerInfo());
-
-            //foreach (var node in allNodes)
-            //{
-            //    var client = HttpClientFactory.CreateClient();
-
-            //    await client.GetAsync(new Uri(node.BaseUri, $"raft/RefreshDiscovery"), cancellationToken);
-            //}
+            foreach (var node in allNodes)
+            {
+                await NodeRegistry.TryRemove(node.UniqueNodeId);
+            }
         }
 
         public async Task<IDiscoveryOperation> Enroll(NodeConfiguration configuration, CancellationToken cancellationToken)

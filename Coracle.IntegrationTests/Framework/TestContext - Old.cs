@@ -1,9 +1,6 @@
 ﻿using ActivityLogger.Logging;
 using Coracle.IntegrationTests.Components.Logging;
 using Coracle.IntegrationTests.Components.Registries;
-using Core.Raft.Canoe.Engine.Configuration.Cluster;
-using Core.Raft.Canoe.Engine.Remoting;
-using EventGuidance.Dependency;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;

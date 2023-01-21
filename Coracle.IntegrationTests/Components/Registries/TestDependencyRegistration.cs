@@ -1,20 +1,16 @@
-﻿using Core.Raft.Canoe.Engine.ClientHandling;
-using Core.Raft.Canoe.Engine.Configuration;
-using Core.Raft.Canoe.Engine.Configuration.Cluster;
-using Core.Raft.Canoe.Engine.Logs.CollectionStructure;
-using Core.Raft.Canoe.Engine.Remoting;
-using Core.Raft.Canoe.Engine.States;
-using EventGuidance.Logging;
-using ActivityLogger.Logging;
-using Core.Raft.Canoe.Engine.Discovery;
+﻿using ActivityLogger.Logging;
 using Coracle.IntegrationTests.Components.Discovery;
-using Coracle.IntegrationTests.Components.ClientHandling.Notes;
-using Coracle.IntegrationTests.Components.ClientHandling;
 using Coracle.IntegrationTests.Components.PersistentData;
 using Coracle.IntegrationTests.Components.Logging;
-using EventGuidance.Dependency;
 using Coracle.IntegrationTests.Components.Remoting;
-using Core.Raft.Canoe.Engine.Discovery.Registrar;
+using Coracle.Raft.Engine.ClientHandling;
+using Coracle.Raft.Engine.Discovery.Registrar;
+using Coracle.Raft.Engine.Discovery;
+using Coracle.Raft.Engine.States;
+using Coracle.Raft.Engine.Remoting;
+using TaskGuidance.BackgroundProcessing.Dependencies;
+using Coracle.Samples.ClientHandling.Notes;
+using Coracle.Samples.ClientHandling;
 
 namespace Coracle.IntegrationTests.Components.Registries
 {

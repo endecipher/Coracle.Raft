@@ -1,4 +1,4 @@
-﻿using Core.Raft.Canoe.Engine.Command;
+﻿using Coracle.Raft.Engine.ClientHandling.Command;
 
 namespace Coracle.IntegrationTests.Components.ClientHandling.NoteCommand
 {

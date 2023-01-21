@@ -1,17 +1,15 @@
 ﻿using ActivityLogger.Logging;
-using ActivityMonitoring.Assertions.Core;
 using Coracle.IntegrationTests.Components.Logging;
 using Coracle.IntegrationTests.Components.Registries;
-using Core.Raft.Canoe.Dependencies;
-using Core.Raft.Canoe.Engine.Configuration.Cluster;
-using Core.Raft.Canoe.Engine.Helper;
-using Core.Raft.Canoe.Engine.Node;
-using Core.Raft.Canoe.Engine.Remoting;
-using Core.Raft.Canoe.Engine.Remoting.RPC;
-using EventGuidance.Dependency;
+using Coracle.Raft.Dependencies;
+using Coracle.Raft.Engine.Configuration.Cluster;
+using Coracle.Raft.Engine.Helper;
+using Coracle.Raft.Engine.Remoting.RPC;
+using EntityMonitoring.FluentAssertions.Structure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
+using TaskGuidance.BackgroundProcessing.Dependencies;
 
 namespace Coracle.IntegrationTests.Framework
 {
@@ -83,6 +81,7 @@ namespace Coracle.IntegrationTests.Framework
     public class TestContext : IDisposable
     {
         public INodeContext NodeContext => ComponentContainer.Provider.GetRequiredService<INodeContext>();
+        public ICommandContext CommandContext => ComponentContainer.Provider.GetRequiredService<ICommandContext>();
 
         public TestContext()
         {
@@ -94,6 +93,7 @@ namespace Coracle.IntegrationTests.Framework
             ComponentContainer.ServiceDescriptors.AddSingleton<IHeartbeatTimer, TestHeartbeatTimer>();
 
             ComponentContainer.ServiceDescriptors.AddSingleton<INodeContext, NodeContext>();
+            ComponentContainer.ServiceDescriptors.AddSingleton<ICommandContext, CommandContext>();
             ComponentContainer.ServiceDescriptors.AddSingleton<IActivityMonitorSettings, ActivityMonitorSettings>();
             ComponentContainer.ServiceDescriptors.AddSingleton<IActivityMonitor<Activity>, ActivityMonitor<Activity>>();
 
@@ -150,23 +150,34 @@ namespace Coracle.IntegrationTests.Framework
         }
     }
 
-    public class DotNetDependencyContainer : IDependencyContainer
+    public interface ICommandContext
     {
-        public DotNetDependencyContainer(IServiceCollection serviceDescriptors)
+        int NextCommandCounter { get; }
+
+        int GetLastCommandCounter { get; }
+    }
+
+    public class CommandContext : ICommandContext
+    {
+        private int _commandCounter = 0;
+        private int _lastCommandCounter = 0;
+
+        public int NextCommandCounter
         {
-            ServiceDescriptors = serviceDescriptors;
+            get
+            {
+                _commandCounter++;
+                _lastCommandCounter = _commandCounter;
+                return _commandCounter;
+            }
         }
 
-        public IServiceCollection ServiceDescriptors { get; }
-
-        void IDependencyContainer.RegisterSingleton<T1, T2>()
+        public int GetLastCommandCounter
         {
-            ServiceDescriptors.AddSingleton<T1, T2>();
-        }
-
-        void IDependencyContainer.RegisterTransient<T1, T2>()
-        {
-            ServiceDescriptors.AddTransient<T1, T2>();
+            get
+            {
+                return _lastCommandCounter;
+            }
         }
     }
 }

@@ -1,8 +1,8 @@
 ﻿using ActivityLogger.Logging;
-using Coracle.Web.Discovery.Coracle.Logging;
-using Core.Raft.Canoe.Engine.Configuration.Cluster;
-using Core.Raft.Canoe.Engine.Discovery;
-using Core.Raft.Canoe.Engine.Discovery.Registrar;
+using Coracle.Raft.Engine.Configuration.Cluster;
+using Coracle.Raft.Engine.Discovery;
+using Coracle.Raft.Engine.Discovery.Registrar;
+using Coracle.Samples.Logging;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Coracle.Web.Discovery.Coracle.Registrar
@@ -37,24 +37,13 @@ namespace Coracle.Web.Discovery.Coracle.Registrar
         /// </summary>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
-        public async Task AlertAllNodesForRefresh(CancellationToken cancellationToken)
+        public async Task Clear()
         {
             var allNodes = await NodeRegistry.GetAll();
 
-            ActivityLogger?.Log(new DiscoveryImplActivity
-            {
-                EntitySubject = NodeRegistrarEntity,
-                Event = AlertingAll,
-                Level = ActivityLogLevel.Debug,
-            }
-            .With(ActivityParam.New(Nodes, allNodes)) 
-            .WithCallerInfo());
-
             foreach (var node in allNodes)
             {
-                var client = HttpClientFactory.CreateClient();
-
-                await client.GetAsync(new Uri(node.BaseUri, $"raft/RefreshDiscovery"), cancellationToken);
+                await NodeRegistry.TryRemove(node.UniqueNodeId);
             }
         }
 
@@ -76,7 +65,7 @@ namespace Coracle.Web.Discovery.Coracle.Registrar
             }
             finally
             {
-                ActivityLogger?.Log(new DiscoveryImplActivity
+                ActivityLogger?.Log(new ImplActivity
                 {
                     EntitySubject = NodeRegistrarEntity,
                     Event = EnrollingNew,
@@ -107,7 +96,7 @@ namespace Coracle.Web.Discovery.Coracle.Registrar
             }
             finally
             {
-                ActivityLogger?.Log(new DiscoveryImplActivity
+                ActivityLogger?.Log(new ImplActivity
                 {
                     EntitySubject = NodeRegistrarEntity,
                     Event = GetAll,

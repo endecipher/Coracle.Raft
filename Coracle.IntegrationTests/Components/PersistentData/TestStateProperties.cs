@@ -1,9 +1,8 @@
-﻿using Core.Raft.Canoe.Engine.Logs.CollectionStructure;
-using Core.Raft.Canoe.Engine.States;
-using EventGuidance.Dependency;
-using ActivityLogger.Logging;
+﻿using ActivityLogger.Logging;
 using ActivityLogLevel = ActivityLogger.Logging.ActivityLogLevel;
 using Coracle.IntegrationTests.Components.Logging;
+using Coracle.Raft.Engine.Logs.CollectionStructure;
+using Coracle.Raft.Engine.States;
 
 namespace Coracle.IntegrationTests.Components.PersistentData
 {

@@ -1,5 +1,5 @@
-﻿using Core.Raft.Canoe.Engine.Configuration.Cluster;
-using Core.Raft.Canoe.Engine.Discovery.Registrar;
+﻿using Coracle.Raft.Engine.Configuration.Cluster;
+using Coracle.Raft.Engine.Discovery.Registrar;
 using System.Collections.Concurrent;
 
 namespace Coracle.Web.Discovery.Coracle.Registrar

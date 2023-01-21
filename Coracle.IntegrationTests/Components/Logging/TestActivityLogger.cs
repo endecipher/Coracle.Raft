@@ -1,8 +1,5 @@
-﻿using System.Diagnostics;
-using ActivityLogger.Logging;
-using Newtonsoft.Json;
-using Microsoft.Extensions.Options;
-using ActivityMonitoring.Assertions.Core;
+﻿using ActivityLogger.Logging;
+using EntityMonitoring.FluentAssertions.Structure;
 
 namespace Coracle.IntegrationTests.Components.Logging
 {

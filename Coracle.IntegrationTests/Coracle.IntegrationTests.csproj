@@ -7,12 +7,25 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Components\ClientHandling\**" />
+    <Compile Remove="Components\PersistentData\**" />
+    <EmbeddedResource Remove="Components\ClientHandling\**" />
+    <EmbeddedResource Remove="Components\PersistentData\**" />
+    <None Remove="Components\ClientHandling\**" />
+    <None Remove="Components\PersistentData\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Components\Logging\ImplActivity.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Remove="Framework\settings1.json" />
     <None Remove="Framework\Settings\settings1.json" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="FluentAssertions" Version="6.8.0" />
+    <PackageReference Include="EntityMonitoring.FluentAssertions" Version="1.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="6.0.3" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.1.0" />
     <PackageReference Include="xunit" Version="2.4.1" />
@@ -23,8 +36,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\ActivityMonitoring.Assertions\ActivityMonitoring.Assertions.csproj" />
-    <ProjectReference Include="..\Core.Raft\Core.Raft.csproj" />
+    <ProjectReference Include="..\Coracle.Samples\Coracle.Samples.csproj" />
   </ItemGroup>
 
   <ItemGroup>

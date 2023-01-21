@@ -11,7 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Core.Raft\Core.Raft.csproj" />
+    <ProjectReference Include="..\Coracle.Samples\Coracle.Samples.csproj" />
   </ItemGroup>
 
 </Project>

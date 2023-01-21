@@ -1,8 +1,6 @@
-﻿using Coracle.Web.Discovery.Coracle.Registrar;
-using Core.Raft.Canoe.Engine.Configuration.Cluster;
-using Core.Raft.Canoe.Engine.Discovery;
-using Core.Raft.Canoe.Engine.Discovery.Registrar;
-using Microsoft.AspNetCore.Http.Extensions;
+﻿using Coracle.Raft.Engine.Configuration.Cluster;
+using Coracle.Raft.Engine.Discovery;
+using Coracle.Raft.Engine.Discovery.Registrar;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Coracle.Web.Discovery.Controllers
@@ -16,7 +14,6 @@ namespace Coracle.Web.Discovery.Controllers
 
         public INodeRegistrar NodeRegistrar { get; }
 
-
         [HttpPost(Name = nameof(Enroll))]
         public async Task<IDiscoveryOperation> Enroll()
         {
@@ -29,6 +26,17 @@ namespace Coracle.Web.Discovery.Controllers
         public async Task<IDiscoveryOperation> Get()
         {
             return await NodeRegistrar.GetAllNodes(HttpContext.RequestAborted);
+        }
+
+        [HttpGet(Name = nameof(Clear))]
+        public async Task<IDiscoveryOperation> Clear()
+        {
+            await NodeRegistrar.Clear();
+            
+            return new DiscoveryOperation
+            {
+                IsOperationSuccessful = true,
+            };
         }
     }
 }

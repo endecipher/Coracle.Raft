@@ -1,12 +1,12 @@
-﻿using Core.Raft.Canoe.Engine.Command;
-using Core.Raft.Canoe.Engine.Logs;
-using Core.Raft.Canoe.Engine.Logs.CollectionStructure;
-using Core.Raft.Canoe.Engine.States;
-using ActivityLogger.Logging;
+﻿using ActivityLogger.Logging;
 using ActivityLogLevel = ActivityLogger.Logging.ActivityLogLevel;
 using Coracle.IntegrationTests.Components.Logging;
 using Newtonsoft.Json;
-using Core.Raft.Canoe.Engine.Configuration.Cluster;
+using Coracle.Raft.Engine.Configuration.Cluster;
+using Coracle.Raft.Engine.Logs.CollectionStructure;
+using Coracle.Raft.Engine.States;
+using Coracle.Raft.Engine.ClientHandling.Command;
+using Coracle.Raft.Engine.Logs;
 
 namespace Coracle.IntegrationTests.Components.PersistentData
 {

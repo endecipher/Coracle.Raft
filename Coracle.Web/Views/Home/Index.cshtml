@@ -3,83 +3,76 @@
 }
 
 <div class="container">
-    <div class="row">&nbsp;</div>
-    <div class="row">
-        <div class="col-2">Message</div>
-        <div class="col-4"><input type="text" id="logInput" /></div>
-    </div>
-    <div class="row">&nbsp;</div>
-    <div class="row">
-        <div class="col-6">
-            <input type="button" class="btn-primary" id="sendButton" value="Send Log To Append" />
+    <div class="row raftStateMachine">
+        <div class="col-3">
+            <button type="button" class="btn-success" id="readyBtn" onclick="readyCoracle()">Ready Coracle</button>
+            <div id="readyResult" class="row"></div>
         </div>
     </div>
-</div>
-<div class="row">
-    <div class="col-12">
-        <hr />
+
+    <div><hr/></div>
+    
+    <div class="row coraclePropertyContainer">
+        <div class="col-2">
+            <pre>Term: </pre><span id="coracleTerm" class="coracleTerm"></span>
+            <pre>CommitIndex: </pre><span id="coracleCommitIndex" class="coracleCommitIndex"></span>
+            <pre>LastApplieditIndex: </pre><span id="coracleLastApplied" class="coracleLastApplied"></span>
+        </div>
+        <div class="col-2">
+            <pre>VotedFor: </pre><span id="coracleVotedFor" class="coraclVotedForm"></span>
+            <pre>NextIndices: </pre><span id="coracleNextIndices" class="coracleNextIndices"></span>
+            <pre>MatchIndices: </pre><span id="coracleMatchIndices" class="coracleMatchIndices"></span>
+        </div>
+        <div class="col-8 panel raftEntryPanel" style="overflow-y: auto; overflow-x: hidden; height: 10em">
+            <ol id="raftEntries"></ol>
+        </div>
     </div>
-</div>
-<div class="row">
-    <div class="col-3">
-            <div class="row">
-                <input type="text" id="noteHeader" placeholder="Unique Note Header"/>
+
+    <div><hr/></div>
+    
+    <div class="row noteSection">
+        <div class="col-3">
+            <div class="row" style="padding: 1em">
+                <input type="text" id="addNoteHeader" placeholder="NoteId"/>
             </div>
-            <div class="row">&nbsp;</div>
-            <div class="row">
-                <input type="text" id="noteText" placeholder="Enter Note Text"/> 
+            <div class="row" style="padding: 1em">
+                <input type="text" id="addNoteText" placeholder="Text"/> 
             </div>
-            <div class="row">&nbsp;</div>
-            <div class="row">
+            <div class="row" style="padding: 1em">
                 <button type="button" class="btn-secondary" id="addNoteBtn" onclick="addNote()">Add Note</button>
             </div>
-            <div class="row">&nbsp;</div>
-            <input type="hidden" value="@Url.Action("AddNote", "Command")"/>
-            <div id="commandResult" class="badge">
-            <!-- ajax content will load here -->
-            <!-- you can put the form inside this div -->
-            <!-- so after submit the result will replace the form controls -->
+        </div>
+        <div class="col-3">
+            <div id="addNoteResult" class="row">
+
             </div>
-    </div>
-    <div class="col-1">
-        &nbsp;
-    </div>
-    <div class="col-3" style="padding-right: 0.5em">
-        <form method="post"
-                data-ajax="true"
-                data-ajax-method="post"
-                data-ajax-url="@Url.Action("GetNote", "Command")"
-                data-ajax-loading="#loadingGet"
-                data-ajax-mode="replace"
-                data-ajax-update="#updateGetAction">
-            <div class="row">
-                <input type="text" name="noteHeader" placeholder="Unique Note HeaderId to Get"/>
+        </div>
+        <div class="col-3">
+            <div class="row" style="padding: 1em">
+                <input type="text" id="getNoteHeader" placeholder="NoteId"/>
             </div>
-            <div class="row">&nbsp;</div>
-            <div class="row">
-                <input type="button" class="btn-secondary" id="getNoteButton" value="Get Note" />
+            <div class="row" style="padding: 1em">
+                <button type="button" class="btn-secondary" id="getNoteBtn" onclick="getNote()">Get Note</button>
             </div>
-            <div class="row">&nbsp;</div>
-            <span id="loadingGet" style="display:none;"> <i class="fas fa-spinner fa-spin"></i></span>
-            <div id="updateGetAction">
-            <!-- ajax content will load here -->
-            <!-- you can put the form inside this div -->
-            <!-- so after submit the result will replace the form controls -->
+        </div>
+        <div class="col-3">
+            <div id="getNoteResult" class="row">
+
             </div>
-        </form>
+        </div>
     </div>
-    <div class="col-1">
-        &nbsp;
-    </div>
-    <div class="col-4 panel" style="overflow-y: auto; overflow-x: hidden; height: 20em">
-        <ol id="logList"></ol>
+
+    <div><hr/><br/><span style="display:flex; justify-content:center"><pre>Activity Logger</pre><br/></span></div>
+
+    <div class="col-1 jumbotron panel activityLogging" style="overflow-y: auto; overflow-x: hidden; height: 20em">
+         <ol id="logList"></ol>
     </div>
 </div>
+
 <script src="~/lib/signalr/dist/browser/signalr.js"></script>
 <script src="~/js/log.js"></script>
-<script src="~/js/command.js"></script>
+<script src="~/js/raftEntry.js"></script>
+<script src="~/js/readyCoracle.js"></script>
+<script src="~/js/addNote.js"></script>
+<script src="~/js/getNote.js"></script>
 <script src="~/lib/bootstrap/dist/js/bootstrap.min.js"></script>
-
-
-
-

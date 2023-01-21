@@ -1,30 +1,26 @@
-﻿using Coracle.Web.ClientHandling.NoteCommand;
-using Coracle.Web.ClientHandling.Notes;
-using Coracle.Web.Hubs;
-using Coracle.Web.Logging;
-using Coracle.Web.Node;
-using Core.Raft.Canoe.Engine.Remoting;
-using Core.Raft.Canoe.Engine.Remoting.RPC;
-using EventGuidance.Dependency;
-using EventGuidance.Logging;
+﻿using Coracle.Samples.ClientHandling.NoteCommand;
+using Coracle.Samples.ClientHandling.Notes;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.SignalR;
 
 namespace Coracle.Web.Controllers
 {
     public class CommandController : Controller
     {
-        public CommandController(INode node)
+        public const string Command = nameof(Command);
+        public const string AddNoteConstant = nameof(AddNote);
+        public const string GetNoteConstant = nameof(GetNote);
+
+        public CommandController(ICoracleClient coracleClient)
         {
-            Node = node;
+            CoracleClient = coracleClient;
         }
 
-        public INode Node { get; }
+        public ICoracleClient CoracleClient { get; }
 
         [HttpGet]
         public string Index()
         {
-            return "Ok";
+            return nameof(CommandController);
         }
 
         [HttpPost(Name = nameof(AddNote))]
@@ -36,19 +32,15 @@ namespace Coracle.Web.Controllers
                 Text = obj.Text
             });
 
-            var result = await Node.CanoeNode.ExternalClientCommandHandler.HandleClientCommand(command, HttpContext.RequestAborted);
-
-            return result.IsOperationSuccessful ? $"Added" : result.Exception.Message;
+            return await CoracleClient.ExecuteCommand(command, HttpContext.RequestAborted);
         }
 
         [HttpGet(Name = nameof(GetNote))]
-        public async Task<string> GetNote([FromQuery] string UniqueHeader)
+        public async Task<string> GetNote([FromQuery] string noteHeader)
         {
-            var command = new GetNoteCommand(UniqueHeader);
+            var command = new GetNoteCommand(noteHeader);
 
-            var result = await Node.CanoeNode.ExternalClientCommandHandler.HandleClientCommand(command, HttpContext.RequestAborted);
-
-            return result.CommandResult.ToString();
+            return await CoracleClient.ExecuteCommand(command, HttpContext.RequestAborted);
         }
     }
 }
