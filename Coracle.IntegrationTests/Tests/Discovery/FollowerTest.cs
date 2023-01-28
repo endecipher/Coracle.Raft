@@ -163,7 +163,7 @@ namespace Coracle.IntegrationTests.Framework
                 CurrentIndex = 1,
                 Type = LogEntry.Types.NoOperation,
                 Term = 1,
-                Contents = null
+                Content = null
             };
 
             try
@@ -394,7 +394,7 @@ namespace Coracle.IntegrationTests.Framework
                 CurrentIndex = 2,
                 Term = 1,
                 Type = LogEntry.Types.Command,
-                Contents = command
+                Content = command
             };
 
             try
@@ -628,7 +628,7 @@ namespace Coracle.IntegrationTests.Framework
 
             var previouslyAddedCommandEntry = await Context.GetService<IPersistentProperties>().LogEntries.TryGetValueAtIndex(2);
 
-            var previouslyAddedCommand = await Context.GetService<IPersistentProperties>().LogEntries.ReadFrom<AddNoteCommand>(previouslyAddedCommandEntry);
+            var previouslyAddedCommand = await Context.GetService<IPersistentProperties>().LogEntries.ReadFrom<NoteCommand>(previouslyAddedCommandEntry);
 
             #endregion
 
@@ -641,7 +641,7 @@ namespace Coracle.IntegrationTests.Framework
                 CurrentIndex = 3,
                 Term = 1,
                 Type = LogEntry.Types.Command,
-                Contents = newCommand
+                Content = newCommand
             };
 
             try

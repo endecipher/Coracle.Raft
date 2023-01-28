@@ -16,7 +16,7 @@ namespace Coracle.Raft.Engine.States
     internal sealed class Candidate : AbstractState, ICandidateDependencies
     {
         #region Constants
-        public const string Entity = nameof(Candidate);
+        public new const string Entity = nameof(Candidate);
         public const string StartingElection = nameof(StartingElection);
         public const string incrementedTerm = nameof(incrementedTerm);
         #endregion

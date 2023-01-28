@@ -8,12 +8,12 @@ namespace Coracle.Samples.ClientHandling.Notes
     {
         #region Constants
 
-        private const string NoteEntity = nameof(Notes);
-        private const string NoteName = nameof(NoteName);
-        private const string Note = nameof(Note);
-        private const string IsNotePresent = nameof(IsNotePresent);
-        private const string GetNote = nameof(GetNote);
-        private const string AddNote = nameof(AddNote);
+        public const string NoteEntity = nameof(Notes);
+        public const string NoteName = nameof(NoteName);
+        public const string Note = nameof(Note);
+        public const string IsNotePresent = nameof(IsNotePresent);
+        public const string GetNote = nameof(GetNote);
+        public const string AddNote = nameof(AddNote);
 
         #endregion
 

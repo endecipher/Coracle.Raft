@@ -31,7 +31,7 @@ namespace Coracle.IntegrationTests.Components.PersistentData
         {
             CurrentTerm = 0;
             ActivityLogger = activityLogger;
-            LogEntries = new TestLogHolder(this);
+            LogEntries = new TestLogHolder(this, activityLogger);
         }
 
         private void Snap(string eventString = GetValue)
@@ -50,40 +50,46 @@ namespace Coracle.IntegrationTests.Components.PersistentData
         public Task ClearVotedFor()
         {
             VotedFor = null;
+
             Snap(ClearingVotedFor);
+            
             return Task.CompletedTask;
         }
 
         public Task<long> GetCurrentTerm()
         {
-            Snap();
             return Task.FromResult(CurrentTerm);
         }
 
         public Task<string> GetVotedFor()
         {
-            Snap();
             return Task.FromResult(VotedFor);
         }
 
         public Task<long> IncrementCurrentTerm()
         {
             CurrentTerm++;
+
             Snap(IncrementedCurrentTerm);
+            
             return Task.FromResult(CurrentTerm);
         }
 
         public Task SetCurrentTerm(long termNumber)
         {
             CurrentTerm = termNumber;
+
             Snap(SetCurrentTermExternally);
+            
             return Task.CompletedTask;
         }
 
         public Task SetVotedFor(string serverUniqueId)
         {
             VotedFor = serverUniqueId;
+
             Snap(SetVotedForExternally);
+            
             return Task.CompletedTask;
         }
     }

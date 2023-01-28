@@ -101,7 +101,7 @@ namespace Coracle.Raft.Engine.Configuration
                 Event = NewUpdate,
                 Level = ActivityLogLevel.Debug
             }
-            .With(ActivityParam.New(allNodeIds, string.Join(' ', CurrentConfiguration.Select(_ => _.UniqueNodeId))))
+            .With(ActivityParam.New(allNodeIds, CurrentConfiguration.Select(_ => _.UniqueNodeId).ToArray()))
             .WithCallerInfo());
         }
     }

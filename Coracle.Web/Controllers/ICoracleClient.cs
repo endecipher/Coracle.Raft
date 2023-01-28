@@ -1,9 +1,11 @@
-﻿using Coracle.Raft.Engine.ClientHandling.Command;
+﻿using Coracle.Raft.Engine.Configuration.Cluster;
+using Coracle.Samples.ClientHandling.NoteCommand;
 
 namespace Coracle.Web.Controllers
 {
     public interface ICoracleClient
     {
-        Task<string> ExecuteCommand(ICommand command, CancellationToken token);
+        Task<string> ExecuteCommand(NoteCommand command, CancellationToken token);
+        Task<string> ChangeConfiguration(ConfigurationChangeRPC changeRPC, CancellationToken token);
     }
 }

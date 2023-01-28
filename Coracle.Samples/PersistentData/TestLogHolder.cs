@@ -17,7 +17,7 @@ namespace Coracle.IntegrationTests.Components.PersistentData
     {
         #region Constants 
         public const string Entity = nameof(TestLogHolder);
-        public const string LogChain = nameof(LogChain);
+        public const string logChain = nameof(logChain);
         public const string OverwritingEntries = nameof(OverwritingEntries);
         public const string OverwrittenEntries = nameof(OverwrittenEntries);
         public const string AppendedCommand = nameof(AppendedCommand);
@@ -32,7 +32,7 @@ namespace Coracle.IntegrationTests.Components.PersistentData
         public Element RootElement { get; private set; }
         public Element LastElement { get; private set; }
 
-        public TestLogHolder(IPersistentProperties persistentProperties)
+        public TestLogHolder(IPersistentProperties persistentProperties, IActivityLogger activityLogger)
         {
             RootElement = LastElement = new Element
             {
@@ -40,7 +40,7 @@ namespace Coracle.IntegrationTests.Components.PersistentData
                 {
                     CurrentIndex = 0,
                     Term = 0,
-                    Contents = null,
+                    Content = null,
                     Type = LogEntry.Types.None
                 },
                 NextElement = null,
@@ -48,22 +48,42 @@ namespace Coracle.IntegrationTests.Components.PersistentData
             };
 
             Properties = persistentProperties;
+
+            ActivityLogger = activityLogger;
         }
 
         public IPersistentProperties Properties { get; }
 
+        public class SampleDisplayEntry
+        {
+            public object _ { get; init; }
+            public long Term { get; init; }
+            public long Index { get; set; }
+            public string Type { get; init; }
+        }
+
         private void Snap(string eventString)
         {
-            var stringBuilder = new System.Text.StringBuilder();
-
-            var currentElement = RootElement;
-
-            while (currentElement != null)
+            List<SampleDisplayEntry> GetLogChainEntries()
             {
-                stringBuilder.Append(JsonConvert.SerializeObject(currentElement.Entry));
-                stringBuilder.Append(" -> ");
+                var list = new List<SampleDisplayEntry>();
 
-                currentElement = currentElement.NextElement;
+                var currentElement = RootElement;
+
+                while (currentElement != null)
+                {
+                    list.Add(new SampleDisplayEntry
+                    {
+                        _ = currentElement.Entry.Content,
+                        Index = currentElement.Entry.CurrentIndex,
+                        Term = currentElement.Entry.Term,
+                        Type = currentElement.Entry.Type.ToString()
+                    });
+
+                    currentElement = currentElement.NextElement;
+                }
+
+                return list;
             }
 
             ActivityLogger?.Log(new ImplActivity
@@ -72,7 +92,7 @@ namespace Coracle.IntegrationTests.Components.PersistentData
                 Event = eventString,
                 Level = ActivityLogLevel.Debug,
             }
-            .With(ActivityParam.New(LogChain, stringBuilder.ToString()))
+            .With(ActivityParam.New(logChain, GetLogChainEntries()))
             .WithCallerInfo());
         }
 
@@ -100,18 +120,43 @@ namespace Coracle.IntegrationTests.Components.PersistentData
                     currentElement = currentElement.NextElement;
                 }
 
-                //Since we want to delete the chain from [firstIndexToOverWriteFrom, LastElement.Entry.CurrentIndex],
-                //we make the LastElement as the previousElement of the one found above
-                if(isFound)
-                    LastElement = currentElement.PreviousElement;
+                int skipCount = 0;
+
+                if (isFound)
+                {
+                    //If found element is the first element itself, we would need to append all after it
+                    if (currentElement.Entry.Type.HasFlag(LogEntry.Types.None))
+                    {
+                        skipCount = 1;
+                        LastElement = currentElement;
+                    }
+                    else
+                    {
+                        //Since we want to delete the chain from [firstIndexToOverWriteFrom, LastElement.Entry.CurrentIndex],
+                        //we make the LastElement as the previousElement of the one found above
+                        LastElement = currentElement.PreviousElement;
+                    }
+                }
+                
 
                 //Update Link
                 LastElement.NextElement = null;
 
                 //Append from the LastElement, all the new entries afresh
-                foreach (var entryToAppend in logEntries)
+                foreach (var entryToAppend in logEntries.Skip(skipCount))
                 {
-                    Append(entryToAppend);
+                    var newElement = new Element
+                    {
+                        Entry = entryToAppend,
+                        NextElement = null,
+                        PreviousElement = LastElement,
+                    };
+
+                    // Link LastNode
+                    LastElement.NextElement = newElement;
+
+                    //Make new element as last node
+                    LastElement = newElement;
                 }
 
                 Snap(OverwrittenEntries);
@@ -244,7 +289,7 @@ namespace Coracle.IntegrationTests.Components.PersistentData
                     currentElement = currentElement.NextElement;
                 }
 
-                throw new InvalidOperationException("Index doesn't exist in Linked List");
+                return Task.FromResult<LogEntry>(null);
             }
         }
 
@@ -266,8 +311,8 @@ namespace Coracle.IntegrationTests.Components.PersistentData
                 LogEntry item = new LogEntry
                 {
                     Term = term,
-                    Contents = inputCommand,
-                    Type = LogEntry.Types.Command
+                    Content = inputCommand,
+                    Type = LogEntry.Types.Command,
                 };
 
                 Append(item);
@@ -287,9 +332,8 @@ namespace Coracle.IntegrationTests.Components.PersistentData
                 LogEntry item = new LogEntry
                 {
                     Term = term,
-                    Contents = null,
-                    Type = LogEntry.Types.NoOperation
-
+                    Content = null,
+                    Type = LogEntry.Types.NoOperation,
                 };
 
                 Append(item);
@@ -309,8 +353,8 @@ namespace Coracle.IntegrationTests.Components.PersistentData
                 LogEntry item = new LogEntry
                 {
                     Term = term,
-                    Contents = configurations,
-                    Type = LogEntry.Types.Configuration
+                    Content = configurations,
+                    Type = LogEntry.Types.Configuration,
                 };
 
                 Append(item);
@@ -323,7 +367,7 @@ namespace Coracle.IntegrationTests.Components.PersistentData
 
         public Task<IEnumerable<NodeConfiguration>> ReadFrom(LogEntry configurationLogEntry)
         {
-            if (configurationLogEntry.Contents is IEnumerable<NodeConfiguration> conf)
+            if (configurationLogEntry.Content is IEnumerable<NodeConfiguration> conf)
                 return Task.FromResult(conf);
             
             throw new InvalidOperationException();
@@ -331,7 +375,7 @@ namespace Coracle.IntegrationTests.Components.PersistentData
 
         public Task<ICommand> ReadFrom<ICommand>(LogEntry commandLogEntry)
         {
-            if (commandLogEntry.Contents is ICommand command)
+            if (commandLogEntry.Content is ICommand command)
                 return Task.FromResult(command);
 
             throw new InvalidOperationException();
@@ -347,7 +391,7 @@ namespace Coracle.IntegrationTests.Components.PersistentData
             {
                 Entry = entry,
                 NextElement = null,
-                PreviousElement = LastElement
+                PreviousElement = LastElement,
             };
 
             // Link LastNode
@@ -376,6 +420,18 @@ namespace Coracle.IntegrationTests.Components.PersistentData
             }
 
             return initializationTerm;
+        }
+
+        public IEnumerable<LogEntry> GetAll()
+        {
+            var currentElement = RootElement;
+
+            while (currentElement != null)
+            {
+                yield return currentElement.Entry;
+
+                currentElement = currentElement.NextElement;
+            }
         }
     }
 

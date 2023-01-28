@@ -126,5 +126,8 @@ namespace Coracle.Raft.Engine.Logs.CollectionStructure
         /// <param name="EndIndex"></param>
         /// <returns></returns>
         Task<IEnumerable<LogEntry>> FetchLogEntriesBetween(long startIndex, long endIndex);
+        
+        [Obsolete(message: "Not used during core RAFT processes. Can be used for logging")]
+        IEnumerable<LogEntry> GetAll();
     }
 }

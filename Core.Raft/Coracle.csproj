@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Coracle.IntegrationTests" />
+    <InternalsVisibleTo Include="Coracle.Web" />
   </ItemGroup>
 
   <ItemGroup>

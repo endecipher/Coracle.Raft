@@ -10,11 +10,11 @@ namespace Coracle.Web.Controllers
             return View();
         }
 
-        public IActionResult Ready([FromServices] ICoracleNodeAccessor coracleAccessor)
+        public string Ready([FromServices] ICoracleNodeAccessor coracleAccessor)
         {
             coracleAccessor.Ready();
 
-            return StatusCode(200);
+            return coracleAccessor.EngineConfig.NodeId;
         }
     }
 }

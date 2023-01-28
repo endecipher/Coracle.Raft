@@ -24,7 +24,7 @@ namespace Coracle.Raft.Engine.Actions.Contexts
             get
             {
                 var state = CurrentStateAccessor.Get();
-                return !state.IsDisposed && !state.StateValue.IsAbandoned() && !state.StateValue.IsNotStarted();
+                return !state.IsDisposed && !state.StateValue.IsAbandoned() && !state.StateValue.IsStopped();
             }
         }
 

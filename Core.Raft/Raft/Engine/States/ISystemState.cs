@@ -2,8 +2,8 @@
 {
     internal interface ISystemState
     {
-        void Pause();
+        void Stop();
         void Resume();
-        void Decomission();
+        void Decommission();
     }
 }

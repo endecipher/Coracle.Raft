@@ -11,7 +11,7 @@ namespace Coracle.Raft.Engine.Exceptions
 
         public static ConfigurationChangeDeniedException New()
         {
-            return new ConfigurationChangeDeniedException("This Node is currently in Candidate/Follower state. Forwarding to Leader. ");
+            return new ConfigurationChangeDeniedException("This Node is currently in Candidate/Follower state. Please forwarding to leader. ");
         }
     }
 

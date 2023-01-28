@@ -2,7 +2,7 @@
 
 namespace Coracle.Raft.Engine.ClientHandling.Command
 {
-    public interface ICommand : IDisposable
+    public interface ICommand
     {
         /// <remarks>
         /// Our goal for Raft is to implement linearizable semantics (each operation appears to execute instantaneously,
@@ -37,7 +37,5 @@ namespace Coracle.Raft.Engine.ClientHandling.Command
         bool IsReadOnly { get; }
 
         string Type { get; }
-
-        object Data { get; }
     }
 }

@@ -23,9 +23,9 @@
 
         }
 
-        public static bool IsNotStarted(this StateValues state)
+        public static bool IsStopped(this StateValues state)
         {
-            return state == StateValues.NotStarted;
+            return state == StateValues.Stopped;
         }
 
         public static bool IsAbandoned(this StateValues state)

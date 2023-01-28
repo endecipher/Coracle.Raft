@@ -25,7 +25,7 @@ namespace Coracle.Raft.Engine.Actions.Contexts
         internal IChangingState State { get; set; }
         OnExternalRPCReceiveContextDependencies Dependencies { get; set; }
 
-        public bool IsContextValid => !State.IsDisposed && !State.StateValue.IsAbandoned() && !State.StateValue.IsNotStarted();
+        public bool IsContextValid => !State.IsDisposed && !State.StateValue.IsAbandoned() && !State.StateValue.IsStopped();
         internal bool TurnToFollower { get; set; } = false;
 
         #region Action Dependencies

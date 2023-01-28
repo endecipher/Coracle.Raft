@@ -95,7 +95,7 @@ namespace Coracle.Raft.Engine.States
 
             FillFollowerDependencies(initialFollowerState);
 
-            var volatileProperties = new VolatileProperties
+            var volatileProperties = new VolatileProperties(ActivityLogger)
             {
                 CommitIndex = 0,
                 LastApplied = 0

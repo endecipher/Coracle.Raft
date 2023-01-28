@@ -9,6 +9,7 @@ namespace Coracle.Web.Controllers
         public const string Command = nameof(Command);
         public const string AddNoteConstant = nameof(AddNote);
         public const string GetNoteConstant = nameof(GetNote);
+        public static string ExternalHandlingEndpoint => Command + "/" + nameof(HandleCommand);
 
         public CommandController(ICoracleClient coracleClient)
         {
@@ -26,21 +27,34 @@ namespace Coracle.Web.Controllers
         [HttpPost(Name = nameof(AddNote))]
         public async Task<string> AddNote([FromBody] Note obj, [FromQuery] string tag)
         {
-            var command = new AddNoteCommand(new Note
-            {
-                UniqueHeader = obj.UniqueHeader,
-                Text = obj.Text
-            });
+            var command = NoteCommand.CreateAdd(obj);
 
-            return await CoracleClient.ExecuteCommand(command, HttpContext.RequestAborted);
+            var result = await CoracleClient.ExecuteCommand(command, HttpContext.RequestAborted);
+
+            return result;
         }
 
         [HttpGet(Name = nameof(GetNote))]
         public async Task<string> GetNote([FromQuery] string noteHeader)
         {
-            var command = new GetNoteCommand(noteHeader);
+            var command = NoteCommand.CreateGet(new Note
+            {
+                UniqueHeader = noteHeader,
+            });
 
-            return await CoracleClient.ExecuteCommand(command, HttpContext.RequestAborted);
+            var result = await CoracleClient.ExecuteCommand(command, HttpContext.RequestAborted);
+
+            return result;
+        }
+
+        [HttpPost(Name = nameof(HandleCommand))]
+        public async Task<string> HandleCommand()
+        {
+            var command = await HttpContext.Request.ReadFromJsonAsync<NoteCommand>(HttpContext.RequestAborted);
+
+            var result = await CoracleClient.ExecuteCommand(command, HttpContext.RequestAborted);
+
+            return result;
         }
     }
 }

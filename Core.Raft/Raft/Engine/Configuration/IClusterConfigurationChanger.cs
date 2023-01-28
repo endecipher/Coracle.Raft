@@ -11,7 +11,9 @@ namespace Coracle.Raft.Engine.Configuration
 
         IEnumerable<NodeChangeConfiguration> CalculateJointConsensusConfigurationWith(IEnumerable<NodeConfiguration> newConfiguration);
 
-        void ApplyConfiguration(ClusterMembershipChange membershipChange);
+        void ApplyConfiguration(ClusterMembershipChange membershipChange, bool tryForReplication = false);
+
+        bool HasNodeBeenRemoved(string externalNodeId);
 
         #endregion 
 

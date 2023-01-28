@@ -11,7 +11,7 @@ namespace Coracle.Raft.Engine.Configuration
     /// The configuration change is issued when the <see cref="ICanoeNode.IsStarted"/> is <c>true</c>, 
     /// and the processing may occur when the current Node is an active <see cref="States.Leader"/> of the Cluster.
     /// </summary>
-    internal interface IExternalConfigurationChangeHandler
+    public interface IExternalConfigurationChangeHandler
     {
         Task<ConfigurationChangeResult> IssueConfigurationChange(ConfigurationChangeRPC configurationChangeRPC, CancellationToken cancellationToken);
     }

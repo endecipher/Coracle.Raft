@@ -84,7 +84,9 @@ namespace Coracle.Raft.Engine.Remoting
                 {
                     EngineConfiguration = EngineConfiguration,
                     PersistentState = PersistentState,
-                    LeaderNodePronouncer = LeaderNodePronouncer
+                    LeaderNodePronouncer = LeaderNodePronouncer,
+                    ClusterConfigurationChanger = ClusterConfigurationChanger
+
                 }, ActivityLogger);
 
                 action.SupportCancellation();

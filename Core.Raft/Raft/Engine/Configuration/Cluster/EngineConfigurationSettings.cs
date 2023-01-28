@@ -8,9 +8,6 @@ namespace Coracle.Raft.Engine.Configuration.Cluster
         public int ProcessorQueueSize { get; set; }
         public int ProcessorWaitTimeWhenQueueEmpty_InMilliseconds { get; set; }
         public string NodeId { get; set; }
-        public int SendAppendEntriesRPC_MaxRetryInfinityCounter { get; set; }
-        public int SendRequestVoteRPC_MaxRetryInfinityCounter { get; set; }
-        public int SendAppendEntriesRPC_MaxSessionCapacity { get; set; }
         public bool IncludeOriginalClientCommandInResults { get; set; }
         public bool IncludeOriginalConfigurationInResults { get; set; }
         public bool IncludeJointConsensusConfigurationInResults { get; set; }
@@ -21,8 +18,8 @@ namespace Coracle.Raft.Engine.Configuration.Cluster
         public int HeartbeatInterval_InMilliseconds { get; set; }
         public int NoLeaderElectedWaitInterval_InMilliseconds { get; set; }
         public int ClientCommandTimeout_InMilliseconds { get; set; }
+        public int ConfigurationChangeHandleTimeout_InMilliseconds { get; set; }
         public int AppendEntriesTimeoutOnReceive_InMilliseconds { get; set; }
-        public int CatchupIntervalOnConfigurationChange_InMilliseconds { get; set; }
         public int RequestVoteTimeoutOnReceive_InMilliseconds { get; set; }
         public int RequestVoteTimeoutOnSend_InMilliseconds { get; set; }
         public int AppendEntriesTimeoutOnSend_InMilliseconds { get; set; }
@@ -40,9 +37,6 @@ namespace Coracle.Raft.Engine.Configuration.Cluster
             ProcessorQueueSize = newConfig.ProcessorQueueSize;
             ProcessorWaitTimeWhenQueueEmpty_InMilliseconds = newConfig.ProcessorWaitTimeWhenQueueEmpty_InMilliseconds;
             NodeId = newConfig.NodeId;
-            SendAppendEntriesRPC_MaxRetryInfinityCounter = newConfig.SendAppendEntriesRPC_MaxRetryInfinityCounter;
-            SendRequestVoteRPC_MaxRetryInfinityCounter = newConfig.SendRequestVoteRPC_MaxRetryInfinityCounter;
-            SendAppendEntriesRPC_MaxSessionCapacity = newConfig.SendAppendEntriesRPC_MaxSessionCapacity;
             IncludeOriginalClientCommandInResults = newConfig.IncludeOriginalClientCommandInResults;
             IncludeOriginalConfigurationInResults = newConfig.IncludeOriginalConfigurationInResults;
             IncludeJointConsensusConfigurationInResults = newConfig.IncludeJointConsensusConfigurationInResults;
@@ -53,8 +47,8 @@ namespace Coracle.Raft.Engine.Configuration.Cluster
             HeartbeatInterval_InMilliseconds = newConfig.HeartbeatInterval_InMilliseconds;
             NoLeaderElectedWaitInterval_InMilliseconds = newConfig.NoLeaderElectedWaitInterval_InMilliseconds;
             ClientCommandTimeout_InMilliseconds = newConfig.ClientCommandTimeout_InMilliseconds;
+            ConfigurationChangeHandleTimeout_InMilliseconds = newConfig.ConfigurationChangeHandleTimeout_InMilliseconds;
             AppendEntriesTimeoutOnReceive_InMilliseconds = newConfig.AppendEntriesTimeoutOnReceive_InMilliseconds;
-            CatchupIntervalOnConfigurationChange_InMilliseconds = newConfig.CatchupIntervalOnConfigurationChange_InMilliseconds;
             RequestVoteTimeoutOnReceive_InMilliseconds = newConfig.RequestVoteTimeoutOnReceive_InMilliseconds;
             RequestVoteTimeoutOnSend_InMilliseconds = newConfig.RequestVoteTimeoutOnSend_InMilliseconds;
             AppendEntriesTimeoutOnSend_InMilliseconds = newConfig.AppendEntriesTimeoutOnSend_InMilliseconds;

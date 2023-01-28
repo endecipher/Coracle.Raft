@@ -21,7 +21,7 @@ namespace Coracle.Raft.Engine.Actions.Contexts
             Dependencies = dependencies;
         }
 
-        public bool IsContextValid => !State.IsDisposed && !State.StateValue.IsAbandoned() && !State.StateValue.IsNotStarted();
+        public bool IsContextValid => !State.IsDisposed && !State.StateValue.IsAbandoned() && !State.StateValue.IsStopped();
 
         internal long LogEntryIndex { get; }
         internal IChangingState State => CurrentStateAccessor.Get();

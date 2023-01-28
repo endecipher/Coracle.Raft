@@ -2,7 +2,6 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using ActivityLogger.Logging;
-using CorrelationId.Abstractions;
 using Newtonsoft.Json;
 using Microsoft.Extensions.Options;
 
@@ -10,9 +9,8 @@ namespace Coracle.Web.Discovery.Coracle.Logging
 {
     public class DiscoveryLoggerImpl : IActivityLogger
     {
-        public DiscoveryLoggerImpl(ICorrelationContextAccessor  correlationContext, IOptions<DiscoveryLoggerOptions> options)
+        public DiscoveryLoggerImpl(IOptions<DiscoveryLoggerOptions> options)
         {
-            CorrelationContextAccessor = correlationContext;
             LoggerOptions = options;
         }
 
@@ -20,20 +18,13 @@ namespace Coracle.Web.Discovery.Coracle.Logging
 
         internal DateTimeOffset Now => DateTimeOffset.UtcNow;
 
-        public ICorrelationContextAccessor CorrelationContextAccessor { get; }
         public IOptions<DiscoveryLoggerOptions> LoggerOptions { get; }
 
         public void Log(ActivityLogger.Logging.Activity e)
         {
             if (!CanProceed(e.Level)) return;
 
-            var activity = new
-            {
-                CorrelationId = CorrelationContextAccessor?.CorrelationContext?.CorrelationId,
-                Activity = e
-            };
-
-            string message = Newtonsoft.Json.JsonConvert.SerializeObject(activity, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore });
+            string message = Newtonsoft.Json.JsonConvert.SerializeObject(e, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore });
             Debug.WriteLine(message);
             //LogHubContext.Clients.All.SendAsync(LogHub.ReceiveLog, message);
 

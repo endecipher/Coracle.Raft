@@ -28,11 +28,11 @@ namespace Coracle.Raft.Engine.States
     internal sealed class Leader : AbstractState, ILeaderDependencies
     {
         #region Constants
-        private const string CheckForCommitIndexUpdateDueToSuccessfulResponse = nameof(CheckForCommitIndexUpdateDueToSuccessfulResponse);
-        private const string NodeId = nameof(NodeId);
-        private const string IsFromCommand = nameof(IsFromCommand);
-        private const string SessionId = nameof(SessionId);
-        private const string LeaderEntity = nameof(Leader);
+        public const string CheckForCommitIndexUpdateDueToSuccessfulResponse = nameof(CheckForCommitIndexUpdateDueToSuccessfulResponse);
+        public const string NodeId = nameof(NodeId);
+        public const string IsFromCommand = nameof(IsFromCommand);
+        public const string SessionId = nameof(SessionId);
+        public new const string Entity = nameof(Leader);
         #endregion
 
         public Leader() : base() { StateValue = StateValues.Leader; }
@@ -149,7 +149,7 @@ namespace Coracle.Raft.Engine.States
             ActivityLogger?.Log(new CoracleActivity
             {
                 Description = $"Success Response Received from {externalServerId} for AppendEntriesRPC",
-                EntitySubject = LeaderEntity,
+                EntitySubject = Entity,
                 Event = CheckForCommitIndexUpdateDueToSuccessfulResponse,
                 Level = ActivityLogLevel.Debug,
 

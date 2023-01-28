@@ -3,9 +3,9 @@
     public enum StateValues
     {
         Abandoned = 0,
-        Leader = 3,
-        Candidate = 2,
-        Follower = 1,
-        NotStarted = -1
+        Stopped = 1,
+        Follower = 2,
+        Candidate = 4,
+        Leader = 8,
     }
 }

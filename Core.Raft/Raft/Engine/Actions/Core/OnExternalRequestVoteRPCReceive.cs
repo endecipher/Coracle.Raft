@@ -20,6 +20,7 @@ namespace Coracle.Raft.Engine.Actions.Core
         public const string ActionName = nameof(OnExternalRequestVoteRPCReceive);
         public const string DeniedDueToLesserTerm = nameof(DeniedDueToLesserTerm);
         public const string BeingFollowerAsGreaterTermReceived = nameof(BeingFollowerAsGreaterTermReceived);
+        public const string CandidateNotPartOfCluster = nameof(CandidateNotPartOfCluster);
         public const string inputRequest = nameof(inputRequest);
         public const string DeniedSinceAlreadyVoted = nameof(DeniedSinceAlreadyVoted);
         public const string VotedFor = nameof(VotedFor);
@@ -54,6 +55,23 @@ namespace Coracle.Raft.Engine.Actions.Core
                 Term = Term,
                 VoteGranted = false
             };
+
+            /// <remarks>
+            /// In case an abandoned node starts to send out vote requests, we deny them. As the node is not part of cluster.
+            /// </remarks>
+            if (Input.ClusterConfigurationChanger.HasNodeBeenRemoved(Input.Request.CandidateId))
+            {
+                ActivityLogger?.Log(new CoracleActivity
+                {
+                    EntitySubject = ActionName,
+                    Event = CandidateNotPartOfCluster,
+                    Level = ActivityLogLevel.Debug,
+                }
+                .With(ActivityParam.New(inputRequest, Input.Request))
+                .WithCallerInfo());
+
+                return response;
+            }
 
 
             /// <remarks>

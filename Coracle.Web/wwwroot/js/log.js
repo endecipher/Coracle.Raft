@@ -2,9 +2,6 @@
 
 var connection = new signalR.HubConnectionBuilder().withUrl("/logHub").build();
 
-//Disable send button until connection is established
-document.getElementById("sendButton").disabled = true;
-
 connection.on("ReceiveLog", function (log) {
     var li = document.createElement("li");
     document.getElementById("logList").appendChild(li);
@@ -15,15 +12,15 @@ connection.on("ReceiveLog", function (log) {
 });
 
 connection.start().then(function () {
-    document.getElementById("sendButton").disabled = false;
+    // document.getElementById("sendButton").disabled = false;
 }).catch(function (err) {
     return console.error(err.toString());
 });
 
-document.getElementById("sendButton").addEventListener("click", function (event) {
-    var log = document.getElementById("logInput").value;
-    connection.invoke("SendLog", log).catch(function (err) {
-        return console.error(err.toString());
-    });
-    event.preventDefault();
-});
+//document.getElementById("sendButton").addEventListener("click", function (event) {
+//    var log = document.getElementById("logInput").value;
+//    connection.invoke("SendLog", log).catch(function (err) {
+//        return console.error(err.toString());
+//    });
+//    event.preventDefault();
+//});

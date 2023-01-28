@@ -1,9 +1,15 @@
 ﻿using ActivityLogger.Logging;
+using Coracle.IntegrationTests.Components.PersistentData;
+using Coracle.Raft.Engine.Configuration.Cluster;
+using Coracle.Raft.Engine.Logs;
 using Coracle.Raft.Engine.Operational;
 using Coracle.Raft.Engine.Remoting;
 using Coracle.Raft.Engine.Remoting.RPC;
+using Coracle.Samples.ClientHandling.NoteCommand;
 using Coracle.Samples.Logging;
+using Coracle.Web.Impl.Node;
 using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
 
 namespace Coracle.Web.Controllers
 {
@@ -21,22 +27,37 @@ namespace Coracle.Web.Controllers
         public static string AppendEntriesEndpoint => Raft + "/" + nameof(AppendEntries);
         public static string RequestVoteEndpoint => Raft + "/" + nameof(RequestVote);
 
-        public RaftController(IExternalRpcHandler externalRpcHandler, IActivityLogger activityLogger)
+        public RaftController(IExternalRpcHandler externalRpcHandler, IActivityLogger activityLogger, ICoracleNodeAccessor nodeAccessor)
         {
             ExternalRpcHandler = externalRpcHandler;
             ActivityLogger = activityLogger;
+            NodeAccessor = nodeAccessor;
         }
 
         public IExternalRpcHandler ExternalRpcHandler { get; }
         public IActivityLogger ActivityLogger { get; }
+        public ICoracleNodeAccessor NodeAccessor { get; }
 
         public async Task<Operation<IAppendEntriesRPCResponse>> AppendEntries()
         {
+            if (!NodeAccessor.CoracleNode.IsInitialized || !NodeAccessor.CoracleNode.IsStarted)
+            {
+                return new Operation<IAppendEntriesRPCResponse>
+                {
+                    Exception = new Exception("Node not started yet")
+                };
+            }
+
             Operation<IAppendEntriesRPCResponse> operationResult = new Operation<IAppendEntriesRPCResponse>();
 
             try
             {
-                var rpc = await GetObject<AppendEntriesRPC>(HttpContext.Request);
+                var rpc = await HttpContext.Request.ReadFromJsonAsync<AppendEntriesRPC>();
+
+                if (rpc.Entries != null && rpc.Entries.Any())
+                {
+                    FillContent(rpc.Entries);
+                }
 
                 operationResult = await ExternalRpcHandler.RespondTo(rpc, HttpContext.RequestAborted);
 
@@ -65,13 +86,44 @@ namespace Coracle.Web.Controllers
             return operationResult;
         }
 
+        private void FillContent(IEnumerable<LogEntry> entries)
+        {
+            foreach (var logEntry in entries)
+            {
+                if (logEntry.Type.HasFlag(LogEntry.Types.Command))
+                {
+                    string value = logEntry.Content.ToString();
+
+                    NoteCommand command = JsonConvert.DeserializeObject<NoteCommand>(value);
+
+                    logEntry.Content = command;
+                }
+                else if (logEntry.Type.HasFlag(LogEntry.Types.Configuration))
+                {
+                    string value = logEntry.Content.ToString();
+
+                    IEnumerable<NodeConfiguration> config = JsonConvert.DeserializeObject<List<NodeConfiguration>>(value);
+
+                    logEntry.Content = config;
+                }
+            }
+        }
+
         public async Task<Operation<IRequestVoteRPCResponse>> RequestVote()
         {
+            if (!NodeAccessor.CoracleNode.IsInitialized || !NodeAccessor.CoracleNode.IsStarted)
+            {
+                return new Operation<IRequestVoteRPCResponse>
+                {
+                    Exception = new Exception("Node not started yet")
+                };
+            }
+
             Operation<IRequestVoteRPCResponse> operationResult = new Operation<IRequestVoteRPCResponse>();
 
             try
             {
-                var rpc = await GetObject<RequestVoteRPC>(HttpContext.Request);
+                var rpc = await HttpContext.Request.ReadFromJsonAsync<RequestVoteRPC>();
 
                 operationResult = await ExternalRpcHandler.RespondTo(rpc, HttpContext.RequestAborted);
 
@@ -98,11 +150,6 @@ namespace Coracle.Web.Controllers
             }
 
             return operationResult;
-        }
-
-        public static async Task<TContent> GetObject<TContent>(HttpRequest httpRequest) where TContent : class
-        {
-            return await httpRequest.ReadFromJsonAsync<TContent>();
         }
     }
 }

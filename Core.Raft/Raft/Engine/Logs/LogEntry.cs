@@ -25,7 +25,12 @@ namespace Coracle.Raft.Engine.Logs
 
     public sealed class LogEntry
     {
-        public object Contents { get; init; }
+        #region Use-case based
+
+        public object Content { get; set; }
+
+        #endregion
+
         public long Term { get; init; }
         public long CurrentIndex { get; set; }
         public Types Type { get; init; }

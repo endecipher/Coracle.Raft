@@ -3,6 +3,12 @@
     let header = $("#addNoteHeader").val();
     let body = $("#addNoteText").val();
 
+    $("#addNoteResult").text(' ');
+
+    $('#addNoteBtn').css('display', 'none');
+    
+    $('.addNoteSpinner').css('display', 'block');
+
     console.log('AddNote with header ' + header + ' and body ' + body);
 
     fetch('/command/addnote', {
@@ -22,10 +28,17 @@
                 console.log('AddNote response returned error: ' + err);
             });
 
+            $('#addNoteBtn').css('display', 'block');
+            $('.addNoteSpinner').css('display', 'none');
+
             $("#addNoteResult").text(resp);
         })
         .catch(function (err) {
             console.log(`AddNote fetch call had an error: ${err}`);
-            $("#addNoteResult").val() = err;
+
+            $('#addNoteBtn').css('display', 'block');
+            $('.addNoteSpinner').css('display', 'none');
+
+            $("#addNoteResult").text(err);
         });
 };

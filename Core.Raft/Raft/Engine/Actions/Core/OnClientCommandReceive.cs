@@ -103,12 +103,10 @@ namespace Coracle.Raft.Engine.Actions.Core
             /// The leader handles all client requests (if a client contacts a follower, the follower redirects it to the leader).
             /// <seealso cref="Section 5.1 Raft Basics"/>
             /// </remarks>
-            //TODO: Remove ForwardToLeader Logic. And just return back that, hey, this is not the leader.
             if (Input.State is not Leader || !Input.IsContextValid)
             {
                 ActivityLogger?.Log(new CoracleActivity
                 {
-                    Description = $"Current State Value is {Input.State.StateValue}. Forwarding to Leader..",
                     EntitySubject = ActionName,
                     Event = ForwardingCommandToLeader,
                     Level = ActivityLogLevel.Debug,
@@ -183,7 +181,6 @@ namespace Coracle.Raft.Engine.Actions.Core
 
                 ActivityLogger?.Log(new CoracleActivity
                 {
-                    Description = $"Current State Value is {Input.State.StateValue}. Appending New Entry..",
                     EntitySubject = ActionName,
                     Event = AppendingNewEntryForNonReadOnlyCommand,
                     Level = ActivityLogLevel.Debug,
@@ -277,7 +274,6 @@ namespace Coracle.Raft.Engine.Actions.Core
 
                 ActivityLogger?.Log(new CoracleActivity
                 {
-                    Description = $"Client Command applied post-commit",
                     EntitySubject = ActionName,
                     Event = CommandApplied,
                     Level = ActivityLogLevel.Debug,

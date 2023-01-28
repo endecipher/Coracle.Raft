@@ -55,12 +55,6 @@ namespace Coracle.Raft.Engine.Configuration.Cluster
 
         #region Coracle Other Settings
 
-        public int SendAppendEntriesRPC_MaxRetryInfinityCounter { get; }
-
-        public int SendRequestVoteRPC_MaxRetryInfinityCounter { get; }
-
-        public int SendAppendEntriesRPC_MaxSessionCapacity { get; }
-
         public bool IncludeOriginalClientCommandInResults { get; }
         public bool IncludeOriginalConfigurationInResults { get; }
         public bool IncludeJointConsensusConfigurationInResults { get; }
@@ -74,8 +68,6 @@ namespace Coracle.Raft.Engine.Configuration.Cluster
         /// Time in Milliseconds that this Coracle Node would wait post <see cref="IDiscoverer.EnrollThisNode(Uri, INodeConfiguration, System.Threading.CancellationToken)"/> during <see cref="ICanoeNode.Start"/>
         /// </summary>
         public int WaitPostEnroll_InMilliseconds { get; }
-
-
 
         /// <summary>
         /// Max Election Timeout in Milliseconds. Used together with <see cref="MinElectionTimeout_InMilliseconds"/> to decide on a random timeout for Election Candidacy.
@@ -104,19 +96,19 @@ namespace Coracle.Raft.Engine.Configuration.Cluster
         public int ClientCommandTimeout_InMilliseconds { get; }
 
         /// <summary>
+        /// Configuration Change Handle Timeout In Milliseconds
+        /// </summary>
+        public int ConfigurationChangeHandleTimeout_InMilliseconds { get; }
+
+        /// <summary>
+        /// Response Timeout In Milliseconds for an outgoing Append Entries RPC
+        /// </summary>
+        public int AppendEntriesTimeoutOnSend_InMilliseconds { get; }
+
+        /// <summary>
         /// Processing Timeout In Milliseconds when received an external Append Entries RPC
         /// </summary>
         public int AppendEntriesTimeoutOnReceive_InMilliseconds { get; }
-
-        /// <summary>
-        /// Determines how aggressively should the system check when the newly nodes added are caught up with the leader or not
-        /// </summary>
-        public int CatchupIntervalOnConfigurationChange_InMilliseconds { get; }
-
-        /// <summary>
-        /// Processing Timeout In Milliseconds when received an external Request Vote RPC
-        /// </summary>
-        public int RequestVoteTimeoutOnReceive_InMilliseconds { get; }
 
         /// <summary>
         /// Response Timeout In Milliseconds for an outgoing Request Vote RPC
@@ -124,14 +116,18 @@ namespace Coracle.Raft.Engine.Configuration.Cluster
         public int RequestVoteTimeoutOnSend_InMilliseconds { get; }
 
         /// <summary>
-        /// Response Timeout In Milliseconds for an outgoing Append Entries RPC
+        /// Processing Timeout In Milliseconds when received an external Request Vote RPC
         /// </summary>
-        public int AppendEntriesTimeoutOnSend_InMilliseconds { get; }
+        public int RequestVoteTimeoutOnReceive_InMilliseconds { get; }
+
+        
         public Uri ThisNodeUri { get; }
 
         /// <summary>
         /// This determines how long to wait for an entry to be committed, i.e successful replication across a majority of clusters, 
         /// so that the leader can commit the log entry.
+        /// 
+        /// Both non-Readonly commands, and leader decomission on configuration change would want to wait for a log Entry to be committed before responding, or decomission respectively.
         /// 
         /// It can be equal to the ElectionTimeout only, since we can wait until that long.
         /// </summary>
@@ -140,6 +136,8 @@ namespace Coracle.Raft.Engine.Configuration.Cluster
         /// <summary>
         /// This determines how aggressively to check for an entry to be committed, i.e successful replication across a majority of clusters, 
         /// so that the leader can commit the log entry.
+        /// 
+        /// Both non-Readonly commands, and leader decomission on configuration change would want to wait for a log Entry to be committed before responding, or decomission respectively.
         /// 
         /// It can be a small fraction of the Heartbeat timeout, or ideally - the amount of time o send and receive an RPC in average.
         /// Consider an average network call time.
@@ -162,7 +160,12 @@ namespace Coracle.Raft.Engine.Configuration.Cluster
         /// We can keep it as the same time as Heartbeat Interval for now.
         /// </summary>
         public int CatchUpOfNewNodesWaitInterval_InMilliseconds { get; }
-        int CheckDepositionWaitInterval_InMilliseconds { get; }
+
+        /// <summary>
+        /// For responding to Read-only requests, the leader has to check if it has been deposed or not. This controls the aggression. 
+        /// Setting it to a lower value than heartbeat will help in faster responses.
+        /// </summary>
+        public int CheckDepositionWaitInterval_InMilliseconds { get; }
 
         #endregion
     }

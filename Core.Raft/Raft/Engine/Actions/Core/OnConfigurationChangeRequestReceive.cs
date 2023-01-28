@@ -51,7 +51,7 @@ namespace Coracle.Raft.Engine.Actions.Core
         }, activityLogger)
         { }
 
-        public override TimeSpan TimeOut => TimeSpan.FromMilliseconds(Configuration.ClientCommandTimeout_InMilliseconds);
+        public override TimeSpan TimeOut => TimeSpan.FromMilliseconds(Configuration.ConfigurationChangeHandleTimeout_InMilliseconds);
 
         #region Workflow
 
@@ -61,7 +61,7 @@ namespace Coracle.Raft.Engine.Actions.Core
             {
                 IsOperationSuccessful = false,
                 LeaderNodeConfiguration = null,
-                Exception = LeaderNotFoundException.New(),
+                Exception = ConfigurationChangeDeniedException.New(),
                 ConfigurationChangeRequest = IncludeConfigurationChangeRequest ? Input.ConfigurationChange.NewConfiguration : null,
                 JointConsensusConfiguration =
                     IncludeJointConsensusConfiguration ? Input.ClusterConfigurationChanger
@@ -146,9 +146,7 @@ namespace Coracle.Raft.Engine.Actions.Core
                 .WithCallerInfo());
 
                 result = DefaultOutput();
-                result.IsOperationSuccessful = false;
                 result.LeaderNodeConfiguration = Input.LeaderNodePronouncer.RecognizedLeaderConfiguration;
-                result.Exception = ConfigurationChangeDeniedException.New();
 
                 return result;
             }
@@ -303,12 +301,16 @@ namespace Coracle.Raft.Engine.Actions.Core
             /// Once nodes are caught up, it's time to append the C-new entry
             var newConfigurationLogEntry = await Input.PersistentState.LogEntries.AppendConfigurationEntry(Input.ConfigurationChange.NewConfiguration);
 
+            /// Replicate C-new across Cluster
+            leaderState.SendHeartbeat(null);
+
             /// Since we are the leader, and we know we are writing a Configuration Log Entry, post successful write, we update our ClusterConfiguration
             Input.ClusterConfigurationChanger.ApplyConfiguration(new ClusterMembershipChange
             {
                 Configuration = Input.ConfigurationChange.NewConfiguration,
                 ConfigurationLogEntryIndex = newConfigurationLogEntry.CurrentIndex,
-            });
+            }, 
+            tryForReplication: true);
 
             ActivityLogger?.Log(new CoracleActivity
             {
@@ -324,6 +326,8 @@ namespace Coracle.Raft.Engine.Actions.Core
 
             var output = DefaultOutput();
             output.IsOperationSuccessful = true;
+            output.LeaderNodeConfiguration = Input.LeaderNodePronouncer.RecognizedLeaderConfiguration;
+            output.Exception = null;
 
             return output;
         }

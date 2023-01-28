@@ -28,7 +28,7 @@ namespace Coracle.Raft.Engine.Actions.Contexts
 
 
         public DateTimeOffset InvocationTime { get; internal set; }
-        public bool IsContextValid => !State.IsDisposed && !State.StateValue.IsAbandoned() && !State.StateValue.IsNotStarted();
+        public bool IsContextValid => !State.IsDisposed && !State.StateValue.IsAbandoned() && !State.StateValue.IsStopped();
         internal IChangingState State { get; set; }
 
 

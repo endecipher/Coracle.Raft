@@ -8,7 +8,7 @@ namespace Coracle.Web.Impl.Node
     public interface ICoracleNodeAccessor
     {
         ICanoeNode CoracleNode { get; }
-
+        IEngineConfiguration EngineConfig { get; }
         void Ready();
     }
 
@@ -16,6 +16,8 @@ namespace Coracle.Web.Impl.Node
     {
         private object _lock = new object();
         private ICanoeNode _node = null;
+
+        public IEngineConfiguration EngineConfig { get; }
 
         public ICanoeNode CoracleNode
         {
@@ -43,8 +45,11 @@ namespace Coracle.Web.Impl.Node
         public CoracleNodeAccessor(IAppInfo appInfo, IEngineConfiguration engineConfig, ICanoeNode node, IOptions<EngineConfigurationOptions> engineConfigurationOptions)
         {
             (engineConfig as EngineConfigurationSettings).ApplyFrom(engineConfigurationOptions.Value);
+
             (engineConfig as EngineConfigurationSettings).ThisNodeUri = appInfo.GetCurrentAppUri();
 
+            EngineConfig = engineConfig;
+            
             CoracleNode = node;
         }
 

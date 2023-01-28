@@ -35,16 +35,17 @@ namespace Coracle.Raft.Engine.States
         public const string AbandoningState = nameof(AbandoningState);
         public const string InitializingOnStateChange = nameof(InitializingOnStateChange);
         public const string CommitGreatherThanLastApplied = nameof(CommitGreatherThanLastApplied);
-        public const string NewCommitIndex = nameof(NewCommitIndex);
-        public const string OldCommitIndex = nameof(OldCommitIndex);
+        public const string newCommitIndex = nameof(newCommitIndex);
+        public const string oldCommitIndex = nameof(oldCommitIndex);
         public const string ApplyingLogEntry = nameof(ApplyingLogEntry);
         public const string LogEntry = nameof(LogEntry);
-        public const string LastApplied = nameof(LastApplied);
-        public const string CommitIndex = nameof(CommitIndex);
+        public const string lastApplied = nameof(lastApplied);
+        public const string commitIndex = nameof(commitIndex);
         public const string Resuming = nameof(Resuming);
-        public const string Decomissioning = nameof(Decomissioning);
-        public const string Pausing = nameof(Pausing);
-        public const string Exception = nameof(Exception);
+        public const string Decommissioning = nameof(Decommissioning);
+        public const string Stopping = nameof(Stopping);
+        public const string exception = nameof(exception);
+        public const string newState = nameof(newState);
 
         #endregion
 
@@ -103,8 +104,8 @@ namespace Coracle.Raft.Engine.States
                 Level = ActivityLogLevel.Debug,
 
             }
-            .With(ActivityParam.New(OldCommitIndex, VolatileState.CommitIndex))
-            .With(ActivityParam.New(NewCommitIndex, indexToAssignAsCommitIndex))
+            .With(ActivityParam.New(oldCommitIndex, VolatileState.CommitIndex))
+            .With(ActivityParam.New(newCommitIndex, indexToAssignAsCommitIndex))
             .WithCallerInfo());
 
             if (indexToAssignAsCommitIndex <= VolatileState.CommitIndex)
@@ -117,8 +118,8 @@ namespace Coracle.Raft.Engine.States
                     Level = ActivityLogLevel.Error,
 
                 }
-                .With(ActivityParam.New(NewCommitIndex, indexToAssignAsCommitIndex))
-                .With(ActivityParam.New(OldCommitIndex, VolatileState.CommitIndex))
+                .With(ActivityParam.New(newCommitIndex, indexToAssignAsCommitIndex))
+                .With(ActivityParam.New(oldCommitIndex, VolatileState.CommitIndex))
                 .WithCallerInfo());
 
                 return;
@@ -151,9 +152,9 @@ namespace Coracle.Raft.Engine.States
                             Level = ActivityLogLevel.Debug,
 
                         }
-                        .With(ActivityParam.New(CommitIndex, VolatileState.CommitIndex))
-                        .With(ActivityParam.New(LastApplied, VolatileState.LastApplied))
-                        .With(ActivityParam.New(NewCommitIndex, indexToAssignAsCommitIndex))
+                        .With(ActivityParam.New(commitIndex, VolatileState.CommitIndex))
+                        .With(ActivityParam.New(lastApplied, VolatileState.LastApplied))
+                        .With(ActivityParam.New(newCommitIndex, indexToAssignAsCommitIndex))
                         .WithCallerInfo());
 
                         VolatileState.LastApplied++;
@@ -189,8 +190,8 @@ namespace Coracle.Raft.Engine.States
                             Level = ActivityLogLevel.Error,
 
                         }
-                        .With(ActivityParam.New(Exception, ex))
-                        .With(ActivityParam.New(NewCommitIndex, indexToAssignAsCommitIndex))
+                        .With(ActivityParam.New(exception, ex))
+                        .With(ActivityParam.New(newCommitIndex, indexToAssignAsCommitIndex))
                         .WithCallerInfo());
                     }
                 }
@@ -228,7 +229,7 @@ namespace Coracle.Raft.Engine.States
             }
             .WithCallerInfo());
 
-            StateValue = StateValues.Abandoned;
+            StateValue = StateValues.Stopped;
             ElectionTimer.Dispose();
             await PersistentState.ClearVotedFor();
 
@@ -267,46 +268,56 @@ namespace Coracle.Raft.Engine.States
             IsDisposed = true;
         }
 
-        public void Pause()
+        public void Stop()
         {
+            if (StateValue.IsAbandoned())
+                throw Exceptions.AbandonedStateCannotBeControlledException.New();
+
+            PausedStateValue = StateValue;
+
+            StateValue = StateValues.Stopped;
+
+            /// Configuring new responsibilities means that EventProcessor is stopped, and supplying invokableActionNames with a string "Stopped", means that
+            /// no Enqueued actions will be able to execute.
+            /// 
+            /// StateChanger.Initialize may have to be called to get it up and running again.
+            Responsibilities.ConfigureNew(invocableActionNames: new HashSet<string>
+            {
+                StateValues.Stopped.ToString()
+            },
+            EngineConfiguration.NodeId);
+
             ActivityLogger?.Log(new CoracleActivity
             {
                 EntitySubject = Entity,
-                Event = Pausing,
+                Event = Stopping,
                 Level = ActivityLogLevel.Debug,
-
             }
+            .With(ActivityParam.New(newState, StateValue.ToString()))
             .WithCallerInfo());
-
-            PausedStateValue = StateValue;
-            StateValue = StateValues.Abandoned;
         }
 
         public void Resume()
         {
-            ActivityLogger?.Log(new CoracleActivity
-            {
-                EntitySubject = Entity,
-                Event = Resuming,
-                Level = ActivityLogLevel.Debug,
-
-            }
-            .WithCallerInfo());
+            if (StateValue.IsAbandoned())
+                throw Exceptions.AbandonedStateCannotBeControlledException.New();
 
             StateValue = PausedStateValue;
-        }
 
-        public void Decomission()
-        {
+            Responsibilities.ConfigureNew(null, EngineConfiguration.NodeId);
+
             ActivityLogger?.Log(new CoracleActivity
             {
                 EntitySubject = Entity,
                 Event = Resuming,
                 Level = ActivityLogLevel.Debug,
-
             }
+            .With(ActivityParam.New(newState, StateValue.ToString()))
             .WithCallerInfo());
+        }
 
+        public void Decommission()
+        {
             StateValue = StateValues.Abandoned;
 
             /// Configuring new responsibilities means that EventProcessor is stopped, and supplying invokableActionNames with a random "Abandoned", means that
@@ -317,6 +328,15 @@ namespace Coracle.Raft.Engine.States
                 StateValues.Abandoned.ToString()
             },
             EngineConfiguration.NodeId);
+
+            ActivityLogger?.Log(new CoracleActivity
+            {
+                EntitySubject = Entity,
+                Event = Decommissioning,
+                Level = ActivityLogLevel.Debug,
+            }
+            .With(ActivityParam.New(newState, StateValue.ToString()))
+            .WithCallerInfo());
         }
 
         #endregion

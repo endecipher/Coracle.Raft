@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Coracle.Raft.Engine.Helper;
 
 namespace Coracle.Raft.Engine.Actions.Awaiters
 {
@@ -153,7 +154,7 @@ namespace Coracle.Raft.Engine.Actions.Awaiters
 
                     int self = ClusterConfiguration.IsThisNodePartOfCluster ? 1 : 0;
 
-                    return serversHit + self >= Math.Floor(clusterSize + self / 2d) + 1; // Majority Hit
+                    return Majority.IsAttained(serversHit + self, clusterSize + self); // Majority Hit
                 }
 
                 if (AreMajorityServersHit())

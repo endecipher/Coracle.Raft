@@ -7,6 +7,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Coracle.Raft.Engine.Helper;
 
 namespace Coracle.Raft.Engine.States.LeaderEntities
 {
@@ -222,7 +223,7 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
                     }
                     .With(ActivityParam.New(nodeId, externalServerId))
                     .With(ActivityParam.New(conflictTermOfFollower, followerConflictTerm))
-                    .With(ActivityParam.New(firstIndexOfConflictingTerm, followerFirstIndexOfConflictingTerm))
+                    .With(ActivityParam.New(newNextIndex, followerFirstIndexOfConflictingTerm))
                     .WithCallerInfo());
                 }
                 else
@@ -327,7 +328,7 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
             .WithCallerInfo());
 
             // Check for Majority
-            return peerNodeCountWhoHaveReplicatedGivenIndex + currentNode >= Math.Floor(totalNodes / 2d) + 1;
+            return Majority.IsAttained(peerNodeCountWhoHaveReplicatedGivenIndex + currentNode, totalNodes);
         }
 
         public void HandleConfigurationChange(IEnumerable<INodeConfiguration> newPeerNodeConfigurations)

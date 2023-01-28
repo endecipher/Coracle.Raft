@@ -54,7 +54,7 @@ namespace Coracle.Raft.Engine.Discovery
         /// </summary>
         /// <param name="membershipChange"></param>
         /// <returns></returns>
-        public void ApplyConfiguration(ClusterMembershipChange membershipChange)
+        public void ApplyConfiguration(ClusterMembershipChange membershipChange, bool tryForReplication = false)
         {
             ActivityLogger?.Log(new CoracleActivity
             {
@@ -67,21 +67,20 @@ namespace Coracle.Raft.Engine.Discovery
             string thisNodeId = EngineConfiguration.NodeId;
 
             bool isThisNodeLeader = LeaderNodePronouncer.IsLeaderRecognized && LeaderNodePronouncer.RecognizedLeaderConfiguration.UniqueNodeId.Equals(thisNodeId);
-            bool isThisNodePartOfTheNewConfiguration = membershipChange.Configuration.Any(x => x.UniqueNodeId.Equals(thisNodeId));
+            bool isThisNodeInNewCluster = membershipChange.Configuration.Any(x => x.UniqueNodeId.Equals(thisNodeId));
 
-            /// 
-            /// Update configuration manually
-            /// For any node who is not a part of the configuration anymore, they can drop off
-
-            ClusterConfiguration.UpdateConfiguration(thisNodeId, membershipChange.Configuration);
-            (CurrentStateAccessor.Get() as IHandleConfigurationChange)?.HandleConfigurationChange(ClusterConfiguration.Peers);
-
-            if (!isThisNodePartOfTheNewConfiguration)
+            if (!isThisNodeInNewCluster)
             {
                 if (!isThisNodeLeader)
                 {
+                    /// Update configuration manually
+                    /// For any node who is not a part of the configuration anymore, they can drop off
+
+                    ClusterConfiguration.UpdateConfiguration(thisNodeId, membershipChange.Configuration);
+                    (CurrentStateAccessor.Get() as IHandleConfigurationChange)?.HandleConfigurationChange(ClusterConfiguration.Peers);
+
                     /// Decomission this Node to stop all processing if not a part of the configuration and not a leader
-                    CurrentStateAccessor.Get()?.Decomission();
+                    CurrentStateAccessor.Get()?.Decommission();
                 }
                 else
                 {
@@ -89,19 +88,37 @@ namespace Coracle.Raft.Engine.Discovery
                     /// and is a union of all servers.
                     /// However, during the C-new phase, and once after all the new servers are up-to-date, 
                     ///     if this node is the leader of the cluster, then we can't decomission it unless we commit C-new first.
-                    ///     
 
-                    var action = new OnAwaitDecomission(membershipChange.ConfigurationLogEntryIndex, new OnAwaitDecomissionContextDependencies
+                    var action = new OnAwaitDecomission(membershipChange.ConfigurationLogEntryIndex, membershipChange.Configuration, new OnAwaitDecomissionContextDependencies
                     {
                         ClusterConfiguration = ClusterConfiguration,
                         CurrentStateAccessor = CurrentStateAccessor,
-                        GlobalAwaiter = GlobalAwaiter
+                        GlobalAwaiter = GlobalAwaiter,
+                        EngineConfiguration = EngineConfiguration
                     }, ActivityLogger);
 
                     action.SupportCancellation();
 
                     Responsibilities.QueueAction(action, executeSeparately: false);
                 }
+            }
+            else
+            {
+
+                if (isThisNodeLeader && tryForReplication)
+                {
+                    /// Wait for replication/heartbeat (sort-of). 
+                    /// This will try to attempt to ensure that the nodes scheduled for replication (if available), also get the conf C-new entry replicated. 
+                    /// The abandoning nodes who would still be up, might have the C-new entry replicated which would help them decomission properly. 
+                    /// This wouldn't take too long, as it should take as much time as a heartbeat
+                    GlobalAwaiter.AwaitNoDeposition(System.Threading.CancellationToken.None);
+                }
+
+                /// Update configuration manually
+                /// For any node who is not a part of the configuration anymore, they can drop off
+
+                ClusterConfiguration.UpdateConfiguration(thisNodeId, membershipChange.Configuration);
+                (CurrentStateAccessor.Get() as IHandleConfigurationChange)?.HandleConfigurationChange(ClusterConfiguration.Peers);
             }
         }
 
@@ -163,5 +180,9 @@ namespace Coracle.Raft.Engine.Discovery
             return jointConsensus.Values;
         }
 
+        public bool HasNodeBeenRemoved(string externalNodeId)
+        {
+            return ClusterConfiguration.GetPeerNodeConfiguration(externalNodeId) == null;
+        }
     }
 }

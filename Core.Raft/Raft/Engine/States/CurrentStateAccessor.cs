@@ -7,9 +7,9 @@ namespace Coracle.Raft.Engine.States
     {
         #region Constants
 
-        public const string StateHolderEntity = nameof(CurrentStateAccessor);
+        public const string Entity = nameof(CurrentStateAccessor);
         public const string StateChange = nameof(StateChange);
-        public const string NewState = nameof(NewState);
+        public const string newState = nameof(newState);
 
         #endregion
 
@@ -39,12 +39,12 @@ namespace Coracle.Raft.Engine.States
                 ActivityLogger?.Log(new CoracleActivity
                 {
                     Description = $"State changed to {value.StateValue}",
-                    EntitySubject = StateHolderEntity,
+                    EntitySubject = Entity,
                     Event = StateChange,
                     Level = ActivityLogLevel.Debug,
 
                 }
-                .With(ActivityParam.New(NewState, value.StateValue.ToString()))
+                .With(ActivityParam.New(newState, value.StateValue.ToString()))
                 .WithCallerInfo());
             }
         }

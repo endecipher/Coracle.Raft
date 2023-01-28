@@ -271,7 +271,7 @@ namespace Coracle.IntegrationTests.Framework
 
             assertableQueue
                 .Search()
-                .UntilItSatisfies(x => x.Event.Equals($"{OnClientCommandReceive<AddNoteCommand>.RetryingAsLeaderNodeNotFound}"), $"Event Processor should start and log an Activity");
+                .UntilItSatisfies(x => x.Event.Equals($"{OnClientCommandReceive<NoteCommand>.RetryingAsLeaderNodeNotFound}"), $"Event Processor should start and log an Activity");
 
             Cleanup();
 #endregion
@@ -287,8 +287,8 @@ namespace Coracle.IntegrationTests.Framework
 
             var candidateEstablished = notifiableQueue
                 .AttachNotifier(x =>
-                    x.Is(CurrentStateAccessor.StateHolderEntity, CurrentStateAccessor.StateChange)
-                        && x.Has(CurrentStateAccessor.NewState, nameof(StateValues.Candidate))).RemoveOnceMatched();
+                    x.Is(CurrentStateAccessor.Entity, CurrentStateAccessor.StateChange)
+                        && x.Has(CurrentStateAccessor.newState, nameof(StateValues.Candidate))).RemoveOnceMatched();
 
             var termChanged = notifiableQueue
                 .AttachNotifier(x => x.Is(TestStateProperties.Entity, TestStateProperties.IncrementedCurrentTerm));
@@ -304,8 +304,8 @@ namespace Coracle.IntegrationTests.Framework
 
             var leaderEstablished = notifiableQueue
                 .AttachNotifier(x => 
-                    x.Is(CurrentStateAccessor.StateHolderEntity, CurrentStateAccessor.StateChange) 
-                        && x.Has(CurrentStateAccessor.NewState, nameof(StateValues.Leader))).RemoveOnceMatched();
+                    x.Is(CurrentStateAccessor.Entity, CurrentStateAccessor.StateChange) 
+                        && x.Has(CurrentStateAccessor.newState, nameof(StateValues.Leader))).RemoveOnceMatched();
 
             var updatedIndices = notifiableQueue
                 .AttachNotifier(x =>
@@ -379,6 +379,8 @@ namespace Coracle.IntegrationTests.Framework
 
                 updatedIndices.Wait(EventNotificationTimeOut);
                 commitIndexUpdated.Wait(EventNotificationTimeOut);
+
+                await Task.Delay(1000);
 
                 captureAfterSuccessfulAppendEntries = new StateCapture(Context.GetService<ICurrentStateAccessor>().Get());
 
@@ -673,8 +675,8 @@ namespace Coracle.IntegrationTests.Framework
 
             var candidateEstablished = notifiableQueue
                 .AttachNotifier(x =>
-                    x.Is(CurrentStateAccessor.StateHolderEntity, CurrentStateAccessor.StateChange)
-                        && x.Has(CurrentStateAccessor.NewState, nameof(StateValues.Candidate))).RemoveOnceMatched();
+                    x.Is(CurrentStateAccessor.Entity, CurrentStateAccessor.StateChange)
+                        && x.Has(CurrentStateAccessor.newState, nameof(StateValues.Candidate))).RemoveOnceMatched();
 
             var currentConfiguration = Context.GetService<IClusterConfiguration>().CurrentConfiguration;
 
@@ -713,6 +715,14 @@ namespace Coracle.IntegrationTests.Framework
                 }, approveImmediately: true);
 
                 // Next time, it sends true
+                EnqueueAppendEntriesSuccessResponse(MockNewNodeC);
+
+                EnqueueAppendEntriesSuccessResponse(MockNodeA);
+                EnqueueAppendEntriesSuccessResponse(MockNodeB); //For any heartbeats being sent for the C-new entry to be replicated and then applying cluster configuration
+                EnqueueAppendEntriesSuccessResponse(MockNewNodeC);
+
+                EnqueueAppendEntriesSuccessResponse(MockNodeA);
+                EnqueueAppendEntriesSuccessResponse(MockNodeB); //For any heartbeats being sent for the C-new entry to be replicated and then applying cluster configuration
                 EnqueueAppendEntriesSuccessResponse(MockNewNodeC);
 
                 changeResult = await Context.GetService<IExternalConfigurationChangeHandler>().IssueConfigurationChange(new ConfigurationChangeRPC
@@ -775,7 +785,23 @@ namespace Coracle.IntegrationTests.Framework
                         $"Catchup awaiting should only occur for {MockNewNodeC}, and not other nodes");
 
             Context.NodeContext.GetMockNode(MockNewNodeC).AppendEntriesLock
-                .RemoteCalls.Last().input.Entries.Last().Contents.As<IEnumerable<NodeConfiguration>>()
+                .RemoteCalls
+                .Where(_ => _.input.Entries != null && _.input.Entries.Any())
+                .Where(_ => _.input.Entries.Any(t => t.Type.HasFlag(Raft.Engine.Logs.LogEntry.Types.Configuration)))
+                .Select(_ => _.input)
+                .Count()
+                .Should().Be(2, "As the JointConsensus entry (C-old,new) and the C-new entry should both be sent to the new node");
+
+            Context.NodeContext.GetMockNode(MockNodeB).AppendEntriesLock
+                .RemoteCalls
+                .Where(_ => _.input.Entries != null && _.input.Entries.Any())
+                .Where(_ => _.input.Entries.Any(t => t.Type.HasFlag(Raft.Engine.Logs.LogEntry.Types.Configuration)))
+                .Select(_ => _.input)
+                .Count()
+                .Should().Be(2, "As the JointConsensus entry (C-old,new) and the C-new entry should both be sent to the abandoning node");
+
+            Context.NodeContext.GetMockNode(MockNewNodeC).AppendEntriesLock
+                .RemoteCalls.SkipLast(1).Last().input.Entries.Last().Content.As<IEnumerable<NodeConfiguration>>()
                     .Should().Match(configs => string.Join(' ', configs.Select(x => x.UniqueNodeId))
                         .ContainsThese(SUT, MockNodeA, MockNodeB, MockNewNodeC), 
                             $"All node Ids must be present in the Joint Consensus Configuration entry sent to the new Node as well ");
@@ -816,8 +842,8 @@ namespace Coracle.IntegrationTests.Framework
 
             var followerEstablished = notifiableQueue
                 .AttachNotifier(x =>
-                    x.Is(CurrentStateAccessor.StateHolderEntity, CurrentStateAccessor.StateChange)
-                        && x.Has(CurrentStateAccessor.NewState, nameof(StateValues.Follower))).RemoveOnceMatched();
+                    x.Is(CurrentStateAccessor.Entity, CurrentStateAccessor.StateChange)
+                        && x.Has(CurrentStateAccessor.newState, nameof(StateValues.Follower))).RemoveOnceMatched();
 
             var currentTerm = await Context.GetService<IPersistentProperties>().GetCurrentTerm();
             var lastLogIndexOfCurrentTerm = await Context.GetService<IPersistentProperties>().LogEntries.GetLastIndex();

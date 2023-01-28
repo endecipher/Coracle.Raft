@@ -12,6 +12,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Coracle.Raft.Engine.Actions.Core;
+using Coracle.Raft.Engine.Helper;
 
 namespace Coracle.Raft.Engine.States
 {
@@ -177,7 +178,7 @@ namespace Coracle.Raft.Engine.States
 
             const int self = 1;
 
-            bool hasMajorityAttained = validVotes + self >= Math.Floor((CurrentPeers.Count + self) / 2d) + 1;
+            bool hasMajorityAttained = Majority.IsAttained(validVotes + self, CurrentPeers.Count + self);
 
             // Lock Introduced, since multiple threads may call this method parallely, invoking StateChanger multiple times
             lock (_termLock)

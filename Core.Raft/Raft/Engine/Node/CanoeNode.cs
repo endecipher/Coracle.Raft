@@ -127,7 +127,7 @@ namespace Coracle.Raft.Engine.Node
         {
             if (!IsStarted) throw new InvalidOperationException(nameof(IsStarted) + "not true");
 
-            CurrentStateAccessor.Get()?.Pause();
+            CurrentStateAccessor.Get()?.Stop();
         }
 
         public void Resume()

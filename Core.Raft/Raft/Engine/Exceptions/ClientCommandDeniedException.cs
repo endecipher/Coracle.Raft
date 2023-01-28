@@ -11,7 +11,7 @@ namespace Coracle.Raft.Engine.Exceptions
 
         public static ClientCommandDeniedException New()
         {
-            return new ClientCommandDeniedException("This Node is currently in Candidate/Follower state. Forwarding to Leader. ");
+            return new ClientCommandDeniedException("This Node is currently in Candidate/Follower state. Please forwarding to leader. ");
         }
     }
 }

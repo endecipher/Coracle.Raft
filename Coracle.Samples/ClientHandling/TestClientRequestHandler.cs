@@ -2,6 +2,7 @@
 using Coracle.Raft.Engine.ClientHandling;
 using Coracle.Raft.Engine.ClientHandling.Command;
 using Coracle.Raft.Engine.Configuration.Cluster;
+using Coracle.Samples.ClientHandling.NoteCommand;
 using Coracle.Samples.ClientHandling.Notes;
 using Coracle.Samples.Logging;
 
@@ -50,12 +51,19 @@ namespace Coracle.Samples.ClientHandling
             .With(ActivityParam.New(LogEntryCommand, logEntryCommand))
             .WithCallerInfo());
 
-            if (logEntryCommand == null || logEntryCommand.IsReadOnly || !logEntryCommand.Type.Equals(nameof(Notes.Add)))
+            if (logEntryCommand == null || logEntryCommand.IsReadOnly || !logEntryCommand.Type.Equals(ClientHandling.Notes.Notes.AddNote))
             {
                 return;
             }
 
-            Notes.Add(logEntryCommand.Data as Note);
+            if (logEntryCommand is NoteCommand.NoteCommand baseNoteCommand)
+            {
+                Notes.Add(baseNoteCommand.Data);
+            }
+            else
+            {
+                throw new InvalidOperationException("Invalid Command Type during conversion");
+            }
 
             LatestCommand = new LatestCommandDetails
             {
@@ -104,19 +112,19 @@ namespace Coracle.Samples.ClientHandling
 
             switch (command.Type)
             {
-                case nameof(INotes.Add):
+                case ClientHandling.Notes.Notes.AddNote:
                     {
-                        bool hasNote = Notes.HasNote(command.Data as Note);
+                        bool hasNote = Notes.HasNote((command as NoteCommand.NoteCommand).Data);
                         result.IsOperationSuccessful = true;
                         result.OriginalCommand = IncludeCommand ? command : null;
 
                         /// Since there exists a command.Data/Note, we can be sure that the Command was applied
                         return Task.FromResult(hasNote);
                     }
-                case nameof(INotes.TryGet):
+                case ClientHandling.Notes.Notes.GetNote:
                     {
                         /// For Readonly requests, we don't have to check whether command was applied
-                        bool hasNote = Notes.TryGet(command.Data as string, out var note);
+                        bool hasNote = Notes.TryGet((command as NoteCommand.NoteCommand).Data.UniqueHeader, out var note);
                         result.IsOperationSuccessful = true;
                         result.OriginalCommand = IncludeCommand ? command : null;
                         result.CommandResult = note;
