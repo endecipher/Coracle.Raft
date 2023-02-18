@@ -1,10 +1,12 @@
 ﻿using ActivityLogger.Logging;
+using Coracle.Raft.Engine.Actions.Core;
 using Coracle.Raft.Engine.ClientHandling;
 using Coracle.Raft.Engine.ClientHandling.Command;
 using Coracle.Raft.Engine.Configuration.Cluster;
 using Coracle.Samples.ClientHandling.NoteCommand;
 using Coracle.Samples.ClientHandling.Notes;
 using Coracle.Samples.Logging;
+using Coracle.Samples.PersistentData;
 
 namespace Coracle.Samples.ClientHandling
 {
@@ -14,19 +16,23 @@ namespace Coracle.Samples.ClientHandling
         private const string SimpleClientRequestHandlerEntity = nameof(TestClientRequestHandler);
         private const string ExecutingAndApplyingLogEntryCommand = nameof(ExecutingAndApplyingLogEntryCommand);
         private const string GetCommandResult = nameof(GetCommandResult);
+        private const string ForceRebuild = nameof(ForceRebuild);
         private const string UniqueCommandId = nameof(UniqueCommandId);
         private const string LogEntryCommand = nameof(LogEntryCommand);
+        private const string snapshotDetails = nameof(snapshotDetails);
         #endregion
 
-        public TestClientRequestHandler(INotes notes, IActivityLogger activityLogger, IEngineConfiguration engineConfiguration)
+        public TestClientRequestHandler(INotes notes, IActivityLogger activityLogger, IEngineConfiguration engineConfiguration, ISnapshotManager snapshotManager)
         {
             Notes = notes;
             ActivityLogger = activityLogger;
             EngineConfiguration = engineConfiguration;
+            SnapshotManager = snapshotManager;
         }
 
         INotes Notes { get; }
         IEngineConfiguration EngineConfiguration { get; }
+        public ISnapshotManager SnapshotManager { get; }
         IActivityLogger ActivityLogger { get; }
         bool IncludeCommand => EngineConfiguration.IncludeOriginalClientCommandInResults;
 
@@ -98,7 +104,6 @@ namespace Coracle.Samples.ClientHandling
         {
             ActivityLogger?.Log(new ImplActivity
             {
-                Description = $"Received command {nameof(TryGetCommandResult)}",
                 EntitySubject = SimpleClientRequestHandlerEntity,
                 Event = GetCommandResult,
                 Level = ActivityLogLevel.Debug,
@@ -133,6 +138,25 @@ namespace Coracle.Samples.ClientHandling
                 default:
                     throw new ArgumentException($"Invalid Command Type");
             }
+        }
+
+        public async Task ForceRebuildFromSnapshot(ISnapshotHeader snapshot)
+        {
+            ActivityLogger?.Log(new ImplActivity
+            {
+                EntitySubject = SimpleClientRequestHandlerEntity,
+                Event = ForceRebuild,
+                Level = ActivityLogLevel.Debug,
+
+            }
+            .With(ActivityParam.New(snapshotDetails, snapshot))
+            .WithCallerInfo());
+
+            var file = await SnapshotManager.GetFile(snapshot);
+
+            var data = await file.ReadData();
+
+            Notes.Build(data);
         }
     }
 }

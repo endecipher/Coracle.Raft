@@ -12,9 +12,118 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Coracle.Raft.Engine.Remoting.RPC;
 
 namespace Coracle.Raft.Engine.States.LeaderEntities
 {
+    internal class SnapshotTracker
+    {
+        object _lock = new object();
+
+        bool IsRpcSent = false;
+        public ISnapshotHeader Snapshot { get; private set; }
+        public bool IsInstalling => Snapshot != null;
+
+        public bool CanSend()
+        {
+            lock (_lock)
+            {
+                if (IsRpcSent)
+                {
+                    return false; //Since an ongoing outbound request already exists
+                }
+
+                IsRpcSent = true; // Marking for current request
+                return true;
+            }
+        }
+
+        public void OngoingRPCCompleted()
+        {
+            lock (_lock)
+            {
+                IsRpcSent = false;
+            }
+        }
+
+        public bool CanStartInstallation(ISnapshotHeader snapshotHeader)
+        {
+            lock (_lock)
+            {
+                if (!IsInstalling)
+                {
+                    Snapshot = snapshotHeader;
+                    IsRpcSent = false;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public ISnapshotHeader StopInstallation()
+        {
+            ISnapshotHeader processedSnapshot = null;
+
+            lock (_lock)
+            {
+                processedSnapshot = Snapshot;
+                Snapshot = null;
+                IsRpcSent = false;
+            }
+
+            return processedSnapshot;
+        }
+
+        public void CancelInstallation(ISnapshotHeader snapshotHeader)
+        {
+            string snapshotId = snapshotHeader.SnapshotId;
+            long lastIncludedIndex = snapshotHeader.LastIncludedIndex;
+            long lastIncludedTerm = snapshotHeader.LastIncludedTerm;
+
+            lock (_lock)
+            {
+                if (IsInstalling
+                    && Snapshot.SnapshotId.Equals(snapshotId) 
+                    && Snapshot.LastIncludedIndex.Equals(lastIncludedIndex) 
+                    && Snapshot.LastIncludedTerm.Equals(lastIncludedTerm))
+                {
+                    Snapshot = null;
+                    IsRpcSent = false;
+                }
+            }
+        }
+    }
+
+    internal class AppendEntriesTracker
+    {
+        object _lock = new object();
+
+        bool IsRpcSent = false;
+
+        public bool CanSend()
+        {
+            lock (_lock)
+            {
+                if (IsRpcSent)
+                {
+                    return false; //Since an ongoing outbound request already exists
+                }
+
+                IsRpcSent = true; // Marking for current request
+                return true;
+            }
+        }
+
+        public void OngoingRPCCompleted()
+        {
+            lock (_lock)
+            {
+                IsRpcSent = false;
+            }
+        }
+    }
+
     /// <remarks>
     /// If a follower or candidate crashes, then future RequestVote and AppendEntries RPCs sent to it will
     /// fail.Raft handles these failures by retrying indefinitely; if the crashed server restarts, then the RPC will complete
@@ -34,10 +143,13 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
 
         public const string Entity = nameof(AppendEntriesManager);
         public const string Initiate = nameof(Initiate);
+        public const string InitiateSnapshot = nameof(InitiateSnapshot);
+        public const string OngoingSnapshotExists = nameof(OngoingSnapshotExists);
         public const string Initializing = nameof(Initializing);
         public const string NewConfigurationManagement = nameof(NewConfigurationManagement);
         public const string nodesToAdd = nameof(nodesToAdd);
         public const string nodesToRemove = nameof(nodesToRemove);
+        public const string snapshotDetails = nameof(snapshotDetails);
 
         #endregion
 
@@ -82,73 +194,8 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
             public INodeConfiguration NodeConfiguration { get; init; }
             public DateTimeOffset LastPinged { get; set; }
 
-            public bool CanSend()
-            {
-                lock (_lock)
-                {
-                    if (IsRpcSent)
-                    {
-                        return false; //Since an ongoing outbound request already exists
-                    }
-                    else
-                    {
-                        IsRpcSent = true; // Marking for current request
-                        return true;
-                    }
-                }
-            }
-
-            private bool IsRpcSent = false;
-
-            public void OngoingRPCCompleted()
-            {
-                lock (_lock)
-                {
-                    IsRpcSent = false;
-                }
-            }
-
-            private object _lock = new object();
-        }
-
-        public void InitiateAppendEntries()
-        {
-            ActivityLogger?.Log(new CoracleActivity
-            {
-                EntitySubject = Entity,
-                Event = Initiate,
-                Level = ActivityLogLevel.Verbose,
-            }
-            .WithCallerInfo());
-
-            var state = CurrentStateAccessor.Get();
-
-            Parallel.ForEach(source: CurrentPeers.Values, body: (nodeDetails) =>
-            {
-                SendAppendEntriesToNode(nodeDetails, state);
-            },
-            parallelOptions: new ParallelOptions
-            {
-                CancellationToken = Responsibilities.GlobalCancellationToken,
-            });
-        }
-
-        private void SendAppendEntriesToNode(NodeDetails nodeDetails, IChangingState state)
-        {
-            if (!nodeDetails.CanSend())
-                return;
-
-            var action = new OnSendAppendEntriesRPC(input: nodeDetails.NodeConfiguration, state, new OnSendAppendEntriesRPCContextDependencies
-            {
-                EngineConfiguration = EngineConfiguration,
-                PersistentState = PersistentState,
-                RemoteManager = RemoteManager,
-            }
-            , ActivityLogger);
-
-            action.SupportCancellation();
-
-            Responsibilities.QueueAction(action, executeSeparately: false);
+            public SnapshotTracker SnapshotTracker { get; } = new SnapshotTracker();
+            public AppendEntriesTracker AppendEntriesTracker { get; } = new AppendEntriesTracker();
         }
 
         public void Initialize()
@@ -223,47 +270,223 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
             .WithCallerInfo());
         }
 
-        public bool CanSendTowards(string uniqueNodeId)
+        #region Append Entries
+
+        public async void InitiateAppendEntries()
         {
-            return CurrentPeers.ContainsKey(uniqueNodeId);
+            ActivityLogger?.Log(new CoracleActivity
+            {
+                EntitySubject = Entity,
+                Event = Initiate,
+                Level = ActivityLogLevel.Verbose,
+            }
+            .WithCallerInfo());
+
+            var state = CurrentStateAccessor.Get();
+
+            var nodesForInstallation = (await (state as Leader).LeaderProperties.RequiresSnapshot());
+
+            Parallel.ForEach(source: CurrentPeers.Values, body: (nodeDetails) =>
+            {
+                if (nodesForInstallation != null && nodesForInstallation.TryGetValue(nodeDetails.NodeConfiguration.UniqueNodeId, out var snapshot))
+                {
+                    InitiateSnapshotInstallation(nodeDetails.NodeConfiguration.UniqueNodeId, snapshot).GetAwaiter().GetResult();
+                }
+                else
+                {
+                    SendAppendEntriesToNode(nodeDetails, state);
+                }
+            },
+            parallelOptions: new ParallelOptions
+            {
+                CancellationToken = Responsibilities.GlobalCancellationToken,
+            });
         }
+
+        private void SendAppendEntriesToNode(NodeDetails nodeDetails, IChangingState state)
+        {
+            var nodeId = nodeDetails.NodeConfiguration.UniqueNodeId;
+
+            if (!nodeDetails.AppendEntriesTracker.CanSend() || nodeDetails.SnapshotTracker.IsInstalling)
+                return;
+
+            var action = new OnSendAppendEntriesRPC(input: nodeDetails.NodeConfiguration, state, new OnSendAppendEntriesRPCContextDependencies
+            {
+                EngineConfiguration = EngineConfiguration,
+                PersistentState = PersistentState,
+                RemoteManager = RemoteManager,
+            }
+            , ActivityLogger);
+
+            action.SupportCancellation();
+
+            Responsibilities.QueueAction(action, executeSeparately: false);
+        }
+
 
         // Called when an issue occurs
         public void IssueRetry(string uniqueNodeId)
         {
-            MarkNextRequestToBeSent(uniqueNodeId);
-
-            new Task(() =>
+            if (CurrentPeers.TryGetValue(uniqueNodeId, out var nodeDetails))
             {
-                if (CurrentPeers.TryGetValue(uniqueNodeId, out var result))
+                MarkNextRequestToBeSent(nodeDetails);
+
+                new Task(() =>
                 {
-                    SendAppendEntriesToNode(result, CurrentStateAccessor.Get());
+                    SendAppendEntriesToNode(nodeDetails, CurrentStateAccessor.Get());
+
+                }).Start();
+            }
+        }
+
+        #endregion
+
+        #region Snapshot
+
+        public Task CancelInstallation(string uniqueNodeId, ISnapshotHeader snapshotHeader)
+        {
+            if (!CurrentPeers.TryGetValue(uniqueNodeId, out var nodeDetails))
+                return Task.CompletedTask; 
+
+            nodeDetails.SnapshotTracker.CancelInstallation(snapshotHeader);
+
+            return Task.CompletedTask;
+        }
+
+        public async Task InitiateSnapshotInstallation(string uniqueNodeId, ISnapshotHeader snapshot)
+        {
+            if (!CurrentPeers.TryGetValue(uniqueNodeId, out var nodeDetails))
+                return;
+
+            if (nodeDetails.SnapshotTracker.CanStartInstallation(snapshot))
+            {
+                await PersistentState.MarkInstallation(snapshot);
+
+                ActivityLogger?.Log(new CoracleActivity
+                {
+                    EntitySubject = Entity,
+                    Event = InitiateSnapshot,
+                    Level = ActivityLogLevel.Debug,
                 }
-            }).Start();
-        }
+                .With(ActivityParam.New(snapshotDetails, snapshot))
+                .WithCallerInfo());
 
-        // Called when Node has been communicated with successfully
-        public void UpdateFor(string uniqueNodeId)
-        {
-            MarkNextRequestToBeSent(uniqueNodeId);
+                new Task(() =>
+                {
+                    SendSnapshotChunkToNode(nodeDetails, CurrentStateAccessor.Get(), offsetToSend: default);
 
-            if (CurrentPeers.TryGetValue(uniqueNodeId, out var result))
+                }).Start();
+            }
+            else
             {
-                result.LastPinged = DateTimeOffset.UtcNow;
+                ActivityLogger?.Log(new CoracleActivity
+                {
+                    EntitySubject = Entity,
+                    Event = OngoingSnapshotExists,
+                    Level = ActivityLogLevel.Error,
+                }
+                .With(ActivityParam.New(snapshotDetails, nodeDetails.SnapshotTracker.Snapshot))
+                .WithCallerInfo());
             }
         }
 
-        private void MarkNextRequestToBeSent(string uniqueNodeId)
+        private void SendSnapshotChunkToNode(NodeDetails nodeDetails, IChangingState state, int offsetToSend)
         {
-            if (CurrentPeers.TryGetValue(uniqueNodeId, out var result))
+            SnapshotTracker tracker = nodeDetails.SnapshotTracker;
+
+            if (tracker.IsInstalling && tracker.CanSend())
             {
-                result.OngoingRPCCompleted();
+                PersistentState.MarkInstallation(tracker.Snapshot).GetAwaiter().GetResult();
+
+                var action = new OnSendInstallSnapshotChunkRPC(
+                    input: nodeDetails.NodeConfiguration,
+                    state: state,
+                    snapshotHeader: tracker.Snapshot,
+                    chunkOffset: offsetToSend,
+                    new OnSendInstallSnapshotChunkRPCContextDependencies
+                    {
+                        EngineConfiguration = EngineConfiguration,
+                        PersistentState = PersistentState,
+                        RemoteManager = RemoteManager,
+                    }
+                    , ActivityLogger);
+
+                action.SupportCancellation();
+
+                Responsibilities.QueueAction(action, executeSeparately: false);
             }
         }
+
+        public void IssueRetry(string uniqueNodeId, int failedOffset)
+        {
+            if (CurrentPeers.TryGetValue(uniqueNodeId, out var nodeDetails))
+            {
+                MarkNextRequestToBeSent(nodeDetails);
+
+                new Task(() =>
+                {
+                    SendSnapshotChunkToNode(nodeDetails, CurrentStateAccessor.Get(), offsetToSend: failedOffset);
+
+                }).Start();
+            }
+        }
+
+        public Task SendNextSnapshotChunk(string uniqueNodeId, int successfulOffset, bool resendAll = false)
+        {
+            if (CurrentPeers.TryGetValue(uniqueNodeId, out var nodeDetails))
+            {
+                MarkNextRequestToBeSent(nodeDetails);
+
+                new Task(() =>
+                {
+                    SendSnapshotChunkToNode(nodeDetails, CurrentStateAccessor.Get(), resendAll ? 0 : successfulOffset + 1);
+
+                }).Start();
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public async Task CompleteInstallation(string uniqueNodeId)
+        {
+            if (CurrentPeers.TryGetValue(uniqueNodeId, out var nodeDetails))
+            {
+                await PersistentState.MarkCompletion(nodeDetails.SnapshotTracker.StopInstallation());
+                InitiateAppendEntries();
+            }
+        }
+
+        #endregion
 
         public Dictionary<string, DateTimeOffset> FetchLastPinged()
         {
             return CurrentPeers.ToDictionary(x => x.Key, y => y.Value.LastPinged);
         }
+
+        #region Common RPC Actions
+        public bool CanSendTowards(string uniqueNodeId)
+        {
+            return CurrentPeers.ContainsKey(uniqueNodeId);
+        }
+
+        // Called when Node has been communicated with successfully
+        public void UpdateFor(string uniqueNodeId)
+        {
+            if (CurrentPeers.TryGetValue(uniqueNodeId, out var nodeDetails))
+            {
+                MarkNextRequestToBeSent(nodeDetails);
+
+                nodeDetails.LastPinged = DateTimeOffset.UtcNow;
+            }
+        }
+
+        private void MarkNextRequestToBeSent(NodeDetails nodeDetails)
+        {
+            nodeDetails.AppendEntriesTracker.OngoingRPCCompleted();
+
+            nodeDetails.SnapshotTracker.OngoingRPCCompleted();
+        }
+
+        #endregion
     }
 }

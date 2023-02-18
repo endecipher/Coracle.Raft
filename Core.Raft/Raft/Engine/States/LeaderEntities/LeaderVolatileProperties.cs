@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Coracle.Raft.Engine.Helper;
+using Coracle.Raft.Engine.Actions.Core;
 
 namespace Coracle.Raft.Engine.States.LeaderEntities
 {
@@ -116,7 +117,7 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
 
         public void Initialize()
         {
-            var lastIndex = PersistentState.LogEntries.GetLastIndex().GetAwaiter().GetResult();
+            var lastIndex = PersistentState.GetLastIndex().GetAwaiter().GetResult();
 
             ActivityLogger?.Log(new CoracleActivity
             {
@@ -156,13 +157,17 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
 
             var currentNextIndex = indices.NextIndex;
 
+            /// <remarks>
+            /// Returns the supplied term value is it is valid.
+            /// If not valid, returns a previous/lesser term which is valid
+            /// </remarks>
             async Task<long> GetValidTermPriorToConflictingTerm(long conflictingTermValue)
             {
                 var term = conflictingTermValue;
 
                 while (term > 0)
                 {
-                    bool isTermPriorAndValid = term < conflictingTermValue && await PersistentState.LogEntries.DoesTermExist(term);
+                    bool isTermPriorAndValid = term < conflictingTermValue && await PersistentState.DoesTermExist(term);
 
                     if (isTermPriorAndValid)
                     {
@@ -181,7 +186,7 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
             // or, the follower needs a full set of entries in any which case
             bool doesFollowerHaveInvalidTerm = !priorValidTerm.Equals(followerConflictTerm);
 
-            var firstIndexOfPriorValidTerm = await PersistentState.LogEntries.GetFirstIndexForTerm(priorValidTerm);
+            var firstIndexOfPriorValidTerm = await PersistentState.GetFirstIndexForTerm(priorValidTerm);
 
             if (doesFollowerHaveInvalidTerm)
             {
@@ -203,10 +208,10 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
             }
             else
             {
-                var leaderTermOfConflictingIndexEntry = await PersistentState.LogEntries.GetTermAtIndex(followerFirstIndexOfConflictingTerm);
+                var leaderConflictingIndexEntry = await PersistentState.TryGetValueAtIndex(followerFirstIndexOfConflictingTerm);
 
                 // If follower doesn't have an invalid term, then we must check if the logs match up until followerFirstIndexOfConflictingTerm
-                if (leaderTermOfConflictingIndexEntry.Equals(followerConflictTerm))
+                if (leaderConflictingIndexEntry != null && leaderConflictingIndexEntry.Term.Equals(followerConflictTerm))
                 {
                     // Logs match up until the followerFirstIndexOfConflictingTerm, so we can send entries from
                     // [followerFirstIndexOfConflictingTerm, leaderLastLogIndex] in the next AppendEntries RPC for the follower to confirm
@@ -230,7 +235,7 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
                 {
                     // Logs do not match up, thus we send all entries from the first index of the leader term for that index of the conflicting entry
 
-                    var firstIndexOfleaderTermOfConflictingIndexEntry = await PersistentState.LogEntries.GetFirstIndexForTerm(leaderTermOfConflictingIndexEntry);
+                    var firstIndexOfleaderTermOfConflictingIndexEntry = await PersistentState.GetFirstIndexForTerm(leaderConflictingIndexEntry.Term);
 
                     indices.NextIndex = firstIndexOfleaderTermOfConflictingIndexEntry.Value;
 
@@ -255,14 +260,16 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
         /// NextIndex needs to be decremented, and more logs will be sent to bring the follower up to speed.
         /// </summary>
         /// <param name="externalServerId"></param>
-        public Task DecrementNextIndex(string externalServerId)
+        public async Task DecrementNextIndex(string externalServerId)
         {
             if (!Indices.TryGetValue(externalServerId, out var indices))
-                return Task.CompletedTask;
+                return;
 
             var currentNextIndex = indices.NextIndex;
 
-            var newNextIndex = --indices.NextIndex;
+            var newNextIndex = await PersistentState.FetchLogEntryIndexPreviousToIndex(currentNextIndex);
+
+            indices.NextIndex = newNextIndex;
 
             ActivityLogger?.Log(new CoracleActivity
             {
@@ -274,8 +281,6 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
             .With(ActivityParam.New(LeaderVolatileProperties.currentNextIndex, currentNextIndex))
             .With(ActivityParam.New(LeaderVolatileProperties.newNextIndex, newNextIndex))
             .WithCallerInfo());
-
-            return Task.CompletedTask;
         }
 
         /// <summary>
@@ -353,7 +358,7 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
 
             if (serverIdsWhichHaveBeenAdded.Count > 0)
             {
-                var lastIndex = PersistentState.LogEntries.GetLastIndex().GetAwaiter().GetResult();
+                var lastIndex = PersistentState.GetLastIndex().GetAwaiter().GetResult();
 
                 foreach (var node in serverIdsWhichHaveBeenAdded)
                 {
@@ -381,6 +386,26 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
             .With(ActivityParam.New(nodesToRemove, serverIdsWhichHaveBeenRemoved))
             .With(ActivityParam.New(nodesToAdd, serverIdsWhichHaveBeenAdded))
             .WithCallerInfo());
+        }
+
+        public async Task<IDictionary<string, ISnapshotHeader>> RequiresSnapshot()
+        {
+            var existingSnapshot = await PersistentState.GetCommittedSnapshot();
+
+            if (existingSnapshot == null) 
+                return null;
+
+            var nodesWhichRequireSnapshots = new Dictionary<string, ISnapshotHeader>();
+            
+            foreach (var nodeId in Indices.Keys)
+            {
+                if (Indices.TryGetValue(nodeId, out var indices) && indices.MatchIndex < existingSnapshot.LastIncludedIndex)
+                {
+                    nodesWhichRequireSnapshots.Add(nodeId, existingSnapshot);
+                }
+            }
+
+            return nodesWhichRequireSnapshots;
         }
     }
 }

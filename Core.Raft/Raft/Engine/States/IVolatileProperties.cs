@@ -1,4 +1,5 @@
 ﻿using ActivityLogger.Logging;
+using Coracle.Raft.Engine.Actions.Core;
 using Coracle.Raft.Engine.ActivityLogger;
 
 namespace Coracle.Raft.Engine.States
@@ -7,6 +8,7 @@ namespace Coracle.Raft.Engine.States
     {
         long CommitIndex { get; set; }
         long LastApplied { get; set; }
+        void OnSuccessfulSnapshotInstallation(ISnapshotHeader snapshot);
     }
 
     internal class VolatileProperties : IVolatileProperties
@@ -72,6 +74,12 @@ namespace Coracle.Raft.Engine.States
             .With(ActivityParam.New(lastApplied, _lastApplied))
             .With(ActivityParam.New(commitIndex, _commitIndex))
             .WithCallerInfo());
+        }
+
+        public void OnSuccessfulSnapshotInstallation(ISnapshotHeader snapshot)
+        {
+            CommitIndex = snapshot.LastIncludedIndex;
+            LastApplied = snapshot.LastIncludedIndex;
         }
     }
 }

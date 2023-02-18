@@ -209,7 +209,7 @@ namespace Coracle.Raft.Engine.Actions.Core
                 /// in Figure 3. Each log entry also has an integer index identifying its position in the log.
                 /// <seealso cref="Section 5.3 Log Replication"/>
                 /// </remarks>
-                var logEntry = await Input.PersistentState.LogEntries.AppendNewCommandEntry(Input.Command);
+                var logEntry = await Input.PersistentState.AppendNewCommandEntry(Input.Command);
 
                 /// <remarks>
                 /// Each client request contains a command to be executed by the replicated state machines. 

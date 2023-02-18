@@ -1,4 +1,5 @@
-﻿using Coracle.Raft.Engine.ClientHandling.Command;
+﻿using Coracle.Raft.Engine.Actions.Core;
+using Coracle.Raft.Engine.ClientHandling.Command;
 using System.Threading.Tasks;
 
 namespace Coracle.Raft.Engine.ClientHandling
@@ -51,5 +52,12 @@ namespace Coracle.Raft.Engine.ClientHandling
         /// <returns></returns>
         Task ExecuteAndApplyLogEntry(ICommand logEntryCommand);
 
+        /// <summary>
+        /// Reset state machine, and rebuild state from the snapshot. Since this operation is heavy, it is advised to be responded to quickly, 
+        /// and the processing can start asynchronouly
+        /// </summary>
+        /// <param name="snapshotDetail"></param>
+        /// <returns></returns>
+        Task ForceRebuildFromSnapshot(ISnapshotHeader snapshotDetail);
     }
 }

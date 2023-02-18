@@ -165,7 +165,7 @@ namespace Coracle.Raft.Engine.Actions.Core
             var jointConsensus = Input.ClusterConfigurationChanger.CalculateJointConsensusConfigurationWith(Input.ConfigurationChange.NewConfiguration);
 
             /// C-old,new log entry appended to Leader's logs
-            var jointConsensusLogEntry = await Input.PersistentState.LogEntries.AppendConfigurationEntry(jointConsensus);
+            var jointConsensusLogEntry = await Input.PersistentState.AppendConfigurationEntry(jointConsensus);
 
             /// Since we are the leader, and we know we are writing a Configuration Log Entry, post successful write, we update our ClusterConfiguration
             Input.ClusterConfigurationChanger.ApplyConfiguration(new ClusterMembershipChange
@@ -299,7 +299,7 @@ namespace Coracle.Raft.Engine.Actions.Core
             Input.GlobalAwaiter.AwaitNodesToCatchUp(jointConsensusLogEntry.CurrentIndex, newlyAddedNodes, cancellationToken);
 
             /// Once nodes are caught up, it's time to append the C-new entry
-            var newConfigurationLogEntry = await Input.PersistentState.LogEntries.AppendConfigurationEntry(Input.ConfigurationChange.NewConfiguration);
+            var newConfigurationLogEntry = await Input.PersistentState.AppendConfigurationEntry(Input.ConfigurationChange.NewConfiguration);
 
             /// Replicate C-new across Cluster
             leaderState.SendHeartbeat(null);

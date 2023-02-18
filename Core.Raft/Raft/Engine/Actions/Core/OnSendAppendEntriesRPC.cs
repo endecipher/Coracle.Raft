@@ -34,6 +34,8 @@ namespace Coracle.Raft.Engine.Actions.Core
         public const string responseObject = nameof(responseObject);
         public const string SendingOnException = nameof(SendingOnException);
         public const string SendingOnFailure = nameof(SendingOnFailure);
+        public const string RequiresSnapshotToSend = nameof(RequiresSnapshotToSend);
+
         #endregion
 
         /// <summary>
@@ -42,8 +44,6 @@ namespace Coracle.Raft.Engine.Actions.Core
         public override TimeSpan TimeOut => TimeSpan.FromMilliseconds(Input.EngineConfiguration.AppendEntriesTimeoutOnSend_InMilliseconds);
 
         public override string UniqueName => ActionName;
-
-        public Guid Guid { get; set; } = Guid.NewGuid();
 
         public OnSendAppendEntriesRPC(INodeConfiguration input, IChangingState state, OnSendAppendEntriesRPCContextDependencies actionDependencies, IActivityLogger activityLogger = null)
             : base(new OnSendAppendEntriesRPCLogsContext(state, actionDependencies), activityLogger)
@@ -63,7 +63,7 @@ namespace Coracle.Raft.Engine.Actions.Core
         {
             var currentTerm = await Input.PersistentState.GetCurrentTerm();
             (Input.State as Leader).LeaderProperties.TryGetNextIndex(Input.NodeConfiguration.UniqueNodeId, out long nextIndex);
-            var lastLogIndex = await Input.PersistentState.LogEntries.GetLastIndex();
+            var lastLogIndex = await Input.PersistentState.GetLastIndex();
 
             AppendEntriesRPC callObject;
 
@@ -72,7 +72,7 @@ namespace Coracle.Raft.Engine.Actions.Core
 
             if (isHeartbeat)
             {
-                var lastLogEntry = await Input.PersistentState.LogEntries.TryGetValueAtIndex(lastLogIndex);
+                var lastLogEntry = await Input.PersistentState.TryGetValueAtIndex(lastLogIndex);
 
                 callObject = new AppendEntriesRPC(entries: default)
                 {
@@ -85,13 +85,13 @@ namespace Coracle.Raft.Engine.Actions.Core
             }
             else
             {
-                var logEntriesToSend = await Input.PersistentState.LogEntries.FetchLogEntriesBetween(nextIndex, lastLogIndex);
+                var logEntriesToSend = await Input.PersistentState.FetchLogEntriesBetween(nextIndex, lastLogIndex);
 
-                var previousLogIndex = nextIndex - 1;
+                long previousLogIndex = await Input.PersistentState.FetchLogEntryIndexPreviousToIndex(index: nextIndex);
 
-                bool IsNegative(long value) => value < 0;
+                bool IsNegative(long value) => value < default(long);
 
-                var previousLogEntry = await Input.PersistentState.LogEntries.TryGetValueAtIndex(IsNegative(previousLogIndex) ? 0 : previousLogIndex);
+                var previousLogEntry = await Input.PersistentState.TryGetValueAtIndex(IsNegative(previousLogIndex) ? default(long) : previousLogIndex);
 
                 callObject = new AppendEntriesRPC(entries: logEntriesToSend)
                 {
@@ -262,6 +262,7 @@ namespace Coracle.Raft.Engine.Actions.Core
                     await leader.LeaderProperties.DecrementNextIndex(Input.NodeConfiguration.UniqueNodeId);
                 }
 
+
                 ActivityLogger?.Log(new CoracleActivity
                 {
                     EntitySubject = ActionName,
@@ -273,8 +274,8 @@ namespace Coracle.Raft.Engine.Actions.Core
                 .With(ActivityParam.New(heartbeat, isHeartbeat))
                 .WithCallerInfo());
 
-
                 leader.AppendEntriesManager.UpdateFor(Input.NodeConfiguration.UniqueNodeId);
+
                 /// <remarks>
                 /// Queueing Event Action during State change should automatically cancel since Internal Token would have already canceled on State Change
                 /// </remarks>

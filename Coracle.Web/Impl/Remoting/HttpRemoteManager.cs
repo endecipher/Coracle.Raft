@@ -108,5 +108,47 @@ namespace Coracle.Web.Impl.Remoting
 
             return operationResult;
         }
+
+        public async Task<Operation<IInstallSnapshotRPCResponse>> Send(IInstallSnapshotRPC callObject, INodeConfiguration configuration, CancellationToken cancellationToken)
+        {
+            Operation<IInstallSnapshotRPCResponse> operationResult = new Operation<IInstallSnapshotRPCResponse>();
+
+            try
+            {
+                var requestUri = new Uri(configuration.BaseUri, RaftController.InstallSnapshotEndpoint);
+                var httpClient = HttpClientFactory.CreateClient();
+
+                var httpresponse = await httpClient.PostAsJsonAsync(requestUri, callObject, options: null, cancellationToken);
+
+                if (httpresponse.IsSuccessStatusCode)
+                {
+                    var response = await httpresponse.Content.ReadFromJsonAsync<Operation<InstallSnapshotRPCResponse>>(cancellationToken: cancellationToken);
+                    operationResult.Exception = response.Exception;
+                    operationResult.Response = response.Response;
+                }
+                else
+                {
+                    var code = httpresponse.StatusCode.ToString();
+                    var content = httpresponse.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+
+                    ActivityLogger?.Log(new ImplActivity
+                    {
+                        EntitySubject = Entity,
+                        Event = Unsuccessful,
+                        Level = ActivityLogLevel.Error
+                    }
+                    .With(ActivityParam.New(statusCode, code))
+                    .With(ActivityParam.New(stringContent, content)));
+
+                    operationResult.Exception = new Exception(content);
+                }
+            }
+            catch (Exception ex)
+            {
+                operationResult.Exception = ex;
+            }
+
+            return operationResult;
+        }
     }
 }

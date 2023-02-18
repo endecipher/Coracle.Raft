@@ -104,5 +104,36 @@ namespace Coracle.Raft.Engine.Remoting
 
             return Task.FromResult(response);
         }
+
+        public Task<Operation<IInstallSnapshotRPCResponse>> RespondTo(IInstallSnapshotRPC externalRequest, CancellationToken cancellationToken)
+        {
+            Operation<IInstallSnapshotRPCResponse> response = new Operation<IInstallSnapshotRPCResponse>();
+
+            try
+            {
+                var action = new OnExternalInstallSnapshotChunkRPCReceive(externalRequest as InstallSnapshotRPC, CurrentStateAccessor.Get(), new Actions.Contexts.OnExternalRPCReceiveContextDependencies
+                {
+                    EngineConfiguration = EngineConfiguration,
+                    PersistentState = PersistentState,
+                    LeaderNodePronouncer = LeaderNodePronouncer,
+                    ClusterConfigurationChanger = ClusterConfigurationChanger,
+
+                }, ActivityLogger);
+
+                action.SupportCancellation();
+
+                action.CancellationManager.Bind(cancellationToken);
+
+                response.Response = Responsibilities.QueueBlockingAction<InstallSnapshotRPCResponse>(
+                    action: action, executeSeparately: false
+                );
+            }
+            catch (Exception ex)
+            {
+                response.Exception = ex;
+            }
+
+            return Task.FromResult(response);
+        }
     }
 }

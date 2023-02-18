@@ -1,6 +1,8 @@
 ﻿using System.Collections.Concurrent;
+using System.Text;
 using ActivityLogger.Logging;
 using Coracle.Samples.Logging;
+using Newtonsoft.Json;
 
 namespace Coracle.Samples.ClientHandling.Notes
 {
@@ -14,12 +16,14 @@ namespace Coracle.Samples.ClientHandling.Notes
         public const string IsNotePresent = nameof(IsNotePresent);
         public const string GetNote = nameof(GetNote);
         public const string AddNote = nameof(AddNote);
+        public const string ResetAndClear = nameof(ResetAndClear);
+        public const string Rebuilt = nameof(Rebuilt);
 
         #endregion
 
         IActivityLogger ActivityLogger { get; }
 
-        public ConcurrentDictionary<string, Note> NoteMap { get; }
+        public ConcurrentDictionary<string, Note> NoteMap { get; private set; }
 
         public Notes(IActivityLogger activityLogger)
         {
@@ -73,6 +77,43 @@ namespace Coracle.Samples.ClientHandling.Notes
         public IEnumerable<string> GetAllHeaders()
         {
             return NoteMap.Keys;
+        }
+
+        public void Reset()
+        {
+            NoteMap.Clear();
+
+            ActivityLogger?.Log(new ImplActivity
+            {
+                EntitySubject = NoteEntity,
+                Event = ResetAndClear,
+                Level = ActivityLogLevel.Debug,
+
+            }
+            .WithCallerInfo());
+        }
+
+        public byte[] ExportData()
+        {
+            var export = JsonConvert.SerializeObject(NoteMap);
+            byte[] bytes = Encoding.ASCII.GetBytes(export);
+            return bytes;
+        }
+
+        public void Build(byte[] exportedData)
+        {
+            string data = Encoding.ASCII.GetString(exportedData);
+            Reset();
+            NoteMap = JsonConvert.DeserializeObject<ConcurrentDictionary<string, Note>>(data);
+
+            ActivityLogger?.Log(new ImplActivity
+            {
+                EntitySubject = NoteEntity,
+                Event = Rebuilt,
+                Level = ActivityLogLevel.Debug,
+
+            }
+            .WithCallerInfo());
         }
     }
 }

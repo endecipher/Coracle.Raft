@@ -25,5 +25,13 @@ namespace Coracle.Raft.Engine.Remoting
         /// <param name="cancellationToken">A cancellation token in case Canoe needs to cancel ongoing processing assocaited to <paramref name="externalRequest"/></param>
         /// <returns>An awaitable operation with <see cref="Operation{IRequestVoteRPCResponse}"/> result encompassing Canoe Node's reply, or the <see cref="IRequestVoteRPCResponse"/> response object</returns>
         Task<Operation<IRequestVoteRPCResponse>> RespondTo(IRequestVoteRPC externalRequest, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// This method should be invoked when an external <see cref="IInstallSnapshotRPC"/> call has been recognized towards the associated Canoe Node
+        /// </summary>
+        /// <param name="externalRequest"><see cref="IInstallSnapshotRPC"/> object</param>
+        /// <param name="cancellationToken">A cancellation token in case Canoe needs to cancel ongoing processing assocaited to <paramref name="externalRequest"/></param>
+        /// <returns>An awaitable operation with <see cref="Operation{IInstallSnapshotRPCResponse}"/> result encompassing Canoe Node's reply, or the <see cref="IInstallSnapshotRPCResponse"/> response object</returns>
+        Task<Operation<IInstallSnapshotRPCResponse>> RespondTo(IInstallSnapshotRPC externalRequest, CancellationToken cancellationToken);
     }
 }

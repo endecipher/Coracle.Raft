@@ -177,7 +177,7 @@ namespace Coracle.Raft.Engine.Actions.Core
             ///  
             /// <seealso cref="Figure 2 RequestVoteRPC"/>
             /// </remarks>
-            var lastLogEntryPersisted = await Input.PersistentState.LogEntries.TryGetValueAtLastIndex();
+            var lastLogEntryPersisted = await Input.PersistentState.TryGetValueAtLastIndex();
 
             if (lastLogEntryPersisted.CurrentIndex <= Input.Request.LastLogIndex && lastLogEntryPersisted.Term <= Input.Request.LastLogTerm)
             {

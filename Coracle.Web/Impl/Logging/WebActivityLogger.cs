@@ -4,10 +4,10 @@ using ActivityLogger.Logging;
 using CorrelationId.Abstractions;
 using Newtonsoft.Json;
 using Microsoft.Extensions.Options;
-using Coracle.IntegrationTests.Components.PersistentData;
 using Coracle.Raft.Engine.States.LeaderEntities;
 using Coracle.Raft.Engine.States;
 using Coracle.Raft.Engine.Configuration;
+using Coracle.Samples.PersistentData;
 
 namespace Coracle.Web.Impl.Logging
 {
@@ -105,12 +105,12 @@ namespace Coracle.Web.Impl.Logging
                     }
                     break;
 
-                case TestLogHolder.Entity:
+                case TestStateProperties.EntityLog:
                     {
                         list.Add(new CoracleProperty
                         {
                             Prop = CoracleProperty.Property.LogChain,
-                            Value = e.Parameters.First(_ => _.Name.Equals(TestLogHolder.logChain)).Value
+                            Value = e.Parameters.First(_ => _.Name.Equals(TestStateProperties.logChain)).Value
                         });
                     }
                     break;

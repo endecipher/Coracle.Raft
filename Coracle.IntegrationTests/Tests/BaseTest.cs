@@ -1,6 +1,5 @@
 ﻿using ActivityLogger.Logging;
 using Coracle.Samples.ClientHandling.Notes;
-using Coracle.IntegrationTests.Components.PersistentData;
 using Coracle.IntegrationTests.Components.Remoting;
 using Coracle.Raft.Engine.Actions.Awaiters;
 using Coracle.Raft.Engine.Actions.Core;
@@ -24,6 +23,7 @@ using TaskGuidance.BackgroundProcessing.Core;
 using Xunit;
 using Coracle.Samples.ClientHandling.NoteCommand;
 using Newtonsoft.Json;
+using Coracle.Raft.Engine.Logs;
 
 namespace Coracle.IntegrationTests.Framework
 {
@@ -36,8 +36,8 @@ namespace Coracle.IntegrationTests.Framework
         public const int Seconds = 1000;
         public const int MilliSeconds = 1;
         public const int DecidedEventProcessorQueueSize = 49;
-        public const int DecidedEventProcessorWait = 2 * Seconds;
-        public TimeSpan EventNotificationTimeOut = TimeSpan.FromSeconds(100);
+        public const int DecidedEventProcessorWait = 100 * MilliSeconds;
+        public TimeSpan EventNotificationTimeOut = TimeSpan.FromSeconds(200);
 
         public EngineConfigurationSettings TestEngineSettings => new EngineConfigurationSettings
         {
@@ -57,8 +57,8 @@ namespace Coracle.IntegrationTests.Framework
 #endif
             HeartbeatInterval_InMilliseconds = 5 * Seconds,
 
-            MinElectionTimeout_InMilliseconds = 19 * Seconds,
-            MaxElectionTimeout_InMilliseconds = 20 * Seconds,
+            MinElectionTimeout_InMilliseconds = 5 * Seconds,
+            MaxElectionTimeout_InMilliseconds = 6 * Seconds,
 
             //AppendEntries
             AppendEntriesTimeoutOnSend_InMilliseconds = 1000 * Seconds,
@@ -77,8 +77,17 @@ namespace Coracle.IntegrationTests.Framework
 
             CheckDepositionWaitInterval_InMilliseconds = 2 * Seconds,
 
-            EntryCommitWaitInterval_InMilliseconds = 2 * Seconds,
-            EntryCommitWaitTimeout_InMilliseconds = 1000 * Seconds
+            EntryCommitWaitInterval_InMilliseconds = 100 * MilliSeconds,
+            EntryCommitWaitTimeout_InMilliseconds = 1000 * Seconds,
+
+            ConfigurationChangeHandleTimeout_InMilliseconds = 1000 * Seconds,
+            CompactionWaitPeriod_InMilliseconds = 2000 * Seconds,
+            InstallSnapshotChunkTimeoutOnReceive_InMilliseconds = 1000 *Seconds,
+            InstallSnapshotChunkTimeoutOnSend_InMilliseconds = 1000 *Seconds,
+            CompactionAttemptInterval_InMilliseconds = 2 * Seconds,
+            CompactionAttemptTimeout_InMilliseconds = 1000 * Seconds,
+            SnapshotThresholdSize = 5,
+            SnapshotBufferSizeFromLastEntry = 1
         };
 
         protected BaseTest(TestContext context)
@@ -194,6 +203,32 @@ namespace Coracle.IntegrationTests.Framework
             }, approveImmediately: true);
         }
 
+        protected void EnqueueInstallSnapshotSuccessResponse(string mockNodeId)
+        {
+            Context.NodeContext.GetMockNode(mockNodeId).EnqueueNextInstallSnapshotResponse(rpc => new InstallSnapshotRPCResponse
+            {
+                Term = rpc.Term,
+                Resend = false
+            }, approveImmediately: true);
+        }
+
+        protected async Task<List<LogEntry>> GetAllLogEntries()
+        {
+            var list = new List<LogEntry>();
+
+            var lastIndex = await Context.GetService<IPersistentProperties>().GetLastIndex();
+
+            for (long i = 0; i <= lastIndex; i++)
+            {
+                var entry = await Context.GetService<IPersistentProperties>().TryGetValueAtIndex(i);
+
+                if (entry != null)
+                    list.Add(entry);
+            }
+
+            return list;
+        }
+
 
         public string Serialized(object data)
         {
@@ -222,7 +257,7 @@ namespace Coracle.IntegrationTests.Framework
             CommitIndex = state.VolatileState.CommitIndex;
             LastApplied = state.VolatileState.LastApplied;
 
-            LastLogIndex = (state as IStateDependencies).PersistentState.LogEntries.GetLastIndex().GetAwaiter().GetResult();
+            LastLogIndex = (state as IStateDependencies).PersistentState.GetLastIndex().GetAwaiter().GetResult();
 
             if (state is Leader leader)
             {

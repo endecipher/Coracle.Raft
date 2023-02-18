@@ -184,7 +184,6 @@ namespace Coracle.Raft.Engine.States
 
             var state = newState as ILeaderDependencies;
 
-            state.LeaderNodePronouncer = LeaderNodePronouncer;
             state.LeaderProperties = LeaderVolatileProperties;
             state.AppendEntriesManager = AppendEntriesManager;
             state.HeartbeatTimer = HeartbeatTimer;
@@ -215,6 +214,7 @@ namespace Coracle.Raft.Engine.States
             state.Responsibilities = Responsibilities;
             state.PersistentState = PersistentState;
             state.ClusterConfiguration = ClusterConfiguration;
+            state.LeaderNodePronouncer = LeaderNodePronouncer;
             state.EngineConfiguration = EngineConfiguration;
             state.ElectionTimer = ElectionTimer;
             state.GlobalAwaiter = GlobalAwaiter;

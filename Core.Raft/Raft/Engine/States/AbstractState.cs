@@ -10,6 +10,7 @@ using TaskGuidance.BackgroundProcessing.Core;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Coracle.Raft.Engine.Actions.Common;
 
 namespace Coracle.Raft.Engine.States
 {
@@ -24,6 +25,7 @@ namespace Coracle.Raft.Engine.States
         IClusterConfiguration ClusterConfiguration { get; set; }
         IClusterConfigurationChanger ClusterConfigurationChanger { get; set; }
         IEngineConfiguration EngineConfiguration { get; set; }
+        ILeaderNodePronouncer LeaderNodePronouncer { get; set; }
     }
 
     internal abstract class AbstractState : IChangingState, IStateDependencies, IHandleConfigurationChange
@@ -50,6 +52,7 @@ namespace Coracle.Raft.Engine.States
         #endregion
 
         public IActivityLogger ActivityLogger { get; set; }
+        public ILeaderNodePronouncer LeaderNodePronouncer { get; set; }
         public IPersistentProperties PersistentState { get; set; }
         public IGlobalAwaiter GlobalAwaiter { get; set; }
         public IClientRequestHandler ClientRequestHandler { get; set; }
@@ -159,8 +162,7 @@ namespace Coracle.Raft.Engine.States
 
                         VolatileState.LastApplied++;
 
-                        var entryToApply = PersistentState.LogEntries.TryGetValueAtIndex(VolatileState.LastApplied).GetAwaiter().GetResult();
-
+                        var entryToApply = PersistentState.TryGetValueAtIndex(VolatileState.LastApplied).GetAwaiter().GetResult();
 
                         ActivityLogger?.Log(new CoracleActivity
                         {
@@ -173,10 +175,10 @@ namespace Coracle.Raft.Engine.States
                         .With(ActivityParam.New(LogEntry, entryToApply))
                         .WithCallerInfo());
 
-                        if (!entryToApply.Type.HasFlag(Logs.LogEntry.Types.Command))
+                        if (entryToApply == null || !entryToApply.Type.HasFlag(Logs.LogEntry.Types.Command))
                             continue;
 
-                        var commandToApply = PersistentState.LogEntries.ReadFrom<ICommand>(commandLogEntry: entryToApply).GetAwaiter().GetResult();
+                        var commandToApply = PersistentState.ReadFrom<ICommand>(commandLogEntry: entryToApply).GetAwaiter().GetResult();
 
                         ClientRequestHandler.ExecuteAndApplyLogEntry(commandToApply);
                     }
@@ -259,6 +261,19 @@ namespace Coracle.Raft.Engine.States
         public virtual Task OnStateEstablishment()
         {
             ElectionTimer.RegisterNew(OnElectionTimeout);
+
+            var logCompaction = new OnCompaction(new Actions.Contexts.OnCompactionContextDependencies
+            {
+                EngineConfiguration = EngineConfiguration,
+                LeaderNodePronouncer = LeaderNodePronouncer,
+                PersistentState = PersistentState,
+                Responsibilities = Responsibilities
+
+            }, this, ActivityLogger);
+
+            logCompaction.SupportCancellation();
+
+            Responsibilities.QueueAction(logCompaction, executeSeparately: false);
 
             return Task.CompletedTask;
         }

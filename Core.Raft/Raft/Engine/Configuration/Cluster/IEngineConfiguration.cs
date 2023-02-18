@@ -60,6 +60,21 @@ namespace Coracle.Raft.Engine.Configuration.Cluster
         public bool IncludeJointConsensusConfigurationInResults { get; }
         public bool IncludeConfigurationChangeRequestInResults { get; }
 
+        /// <summary>
+        /// Determines the minimum count of log entries required for snapshot compaction to trigger and for a valid merge.
+        /// If an existing snapshot is already present, the threshold would include it as a single entry during eligibility computation. 
+        /// Acceptable value is a positive integer greater than or equal to 5
+        /// </summary>
+        public int SnapshotThresholdSize { get; }
+
+        /// <summary>
+        /// Determines the minimum count of additional log entries to be excluded from compaction. 
+        /// This serves as a safe buffer distance from the last log entry applied during snapshot compaction, 
+        /// so that eligibility fails if the Snapshot to create is dangerously close to the last log entry.
+        /// Acceptable value is a positive integer greater than or equal to 1
+        /// </summary>
+        public int SnapshotBufferSizeFromLastEntry {get;}
+
         #endregion
 
         #region Coracle Time Settings
@@ -166,6 +181,33 @@ namespace Coracle.Raft.Engine.Configuration.Cluster
         /// Setting it to a lower value than heartbeat will help in faster responses.
         /// </summary>
         public int CheckDepositionWaitInterval_InMilliseconds { get; }
+
+        /// <summary>
+        /// Processing Timeout In Milliseconds when sending an Install Snapshot RPC for a chunk of data
+        /// </summary>
+        public int InstallSnapshotChunkTimeoutOnSend_InMilliseconds { get; }
+
+        /// <summary>
+        /// Processing Timeout In Milliseconds when received an external Install Snapshot RPC for a chunk of data
+        /// </summary>
+        public int InstallSnapshotChunkTimeoutOnReceive_InMilliseconds { get; }
+
+        /// <summary>
+        /// Processing Timeout for the entire compaction process; from eligibility to the actual snapshot creation and merging, if it occurs.
+        /// Setting to a large/the maximum value is recommended.
+        /// </summary>
+        public int CompactionAttemptTimeout_InMilliseconds { get; }
+
+        /// <summary>
+        /// Within the Compaction Process, determines how aggressively the eligibility for compaction should occur.
+        /// </summary>
+        public int CompactionAttemptInterval_InMilliseconds { get; }
+
+        /// <summary>
+        /// Within the Compaction Process, controls how stale the current committed snapshot's last used time should be for the eligibility for re-compaction.
+        /// Setting it to a smaller value is not recommended, since the current snapshot might still be in use for installation.
+        /// </summary>
+        public int CompactionWaitPeriod_InMilliseconds { get; }
 
         #endregion
     }

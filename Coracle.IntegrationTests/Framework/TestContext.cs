@@ -5,6 +5,7 @@ using Coracle.Raft.Dependencies;
 using Coracle.Raft.Engine.Configuration.Cluster;
 using Coracle.Raft.Engine.Helper;
 using Coracle.Raft.Engine.Remoting.RPC;
+using Coracle.Samples.PersistentData;
 using EntityMonitoring.FluentAssertions.Structure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -27,10 +28,19 @@ namespace Coracle.IntegrationTests.Framework
         internal NodeConfiguration Configuration { get; init; }
         internal RemoteAwaitedLock<IAppendEntriesRPC, AppendEntriesRPCResponse> AppendEntriesLock { get; init; }
         internal RemoteAwaitedLock<IRequestVoteRPC, RequestVoteRPCResponse> RequestVoteLock { get; init; }
+        internal RemoteAwaitedLock<IInstallSnapshotRPC, InstallSnapshotRPCResponse> InstallSnapshotLock { get; init; }
 
         public void EnqueueNextRequestVoteResponse(Func<IRequestVoteRPC, object> func, bool approveImmediately = false)
         {
             var @lock = RequestVoteLock.Enqueue(func);
+
+            if (approveImmediately)
+                @lock.Set();
+        }
+
+        public void EnqueueNextInstallSnapshotResponse(Func<IInstallSnapshotRPC, object> func, bool approveImmediately = false)
+        {
+            var @lock = InstallSnapshotLock.Enqueue(func);
 
             if (approveImmediately)
                 @lock.Set();
@@ -64,6 +74,7 @@ namespace Coracle.IntegrationTests.Framework
                 },
                 AppendEntriesLock = new RemoteAwaitedLock<IAppendEntriesRPC, AppendEntriesRPCResponse>(),
                 RequestVoteLock = new RemoteAwaitedLock<IRequestVoteRPC, RequestVoteRPCResponse>(),
+                InstallSnapshotLock = new RemoteAwaitedLock<IInstallSnapshotRPC, InstallSnapshotRPCResponse>(),
             },
             (key, oldConfig) => oldConfig);
         }
@@ -96,6 +107,7 @@ namespace Coracle.IntegrationTests.Framework
             ComponentContainer.ServiceDescriptors.AddSingleton<ICommandContext, CommandContext>();
             ComponentContainer.ServiceDescriptors.AddSingleton<IActivityMonitorSettings, ActivityMonitorSettings>();
             ComponentContainer.ServiceDescriptors.AddSingleton<IActivityMonitor<Activity>, ActivityMonitor<Activity>>();
+            ComponentContainer.ServiceDescriptors.AddSingleton<ISnapshotManager, SnapshotManager>();
 
             //Final step
             ComponentContainer.Build();

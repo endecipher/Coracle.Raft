@@ -19,4 +19,8 @@
   <ItemGroup>
     <PackageReference Include="TaskGuidance.BackgroundProcessing" Version="1.0.0" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Raft\Engine\Snapshots\" />
+  </ItemGroup>
 </Project>

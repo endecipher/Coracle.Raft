@@ -31,6 +31,7 @@ namespace Coracle.Raft.Engine.Actions.Core
         public const string CommandId = nameof(CommandId);
         public const string CurrentState = nameof(CurrentState);
         public const string Response = nameof(Response);
+        public const string DeniedDueToLesserTerm = nameof(DeniedDueToLesserTerm);
         public const string DeniedDueToNonExistentPreviousIndex = nameof(DeniedDueToNonExistentPreviousIndex);
         public const string DeniedDueToNonExistentPreviousTerm = nameof(DeniedDueToNonExistentPreviousTerm);
         public const string RevertingToFollower = nameof(RevertingToFollower);
@@ -144,7 +145,7 @@ namespace Coracle.Raft.Engine.Actions.Core
                 ActivityLogger?.Log(new CoracleActivity
                 {
                     EntitySubject = ActionName,
-                    Event = DeniedDueToNonExistentPreviousIndex,
+                    Event = DeniedDueToLesserTerm,
                     Level = ActivityLogLevel.Debug,
 
                 }
@@ -192,12 +193,12 @@ namespace Coracle.Raft.Engine.Actions.Core
             }
 
 
-            var logEntryAtPreviousIndex = await Input.PersistentState.LogEntries.TryGetValueAtIndex(Input.Request.PreviousLogIndex);
-            
+            var logEntryAtPreviousIndex = await Input.PersistentState.TryGetValueAtIndex(Input.Request.PreviousLogIndex);
+
             //If an entry doesn't exist for the previous log index
             if (logEntryAtPreviousIndex == null)
             {
-                var doesPreviousTermExist = await Input.PersistentState.LogEntries.DoesTermExist(Input.Request.PreviousLogTerm);
+                var doesPreviousTermExist = await Input.PersistentState.DoesTermExist(Input.Request.PreviousLogTerm);
 
                 if (doesPreviousTermExist)
                 {
@@ -205,7 +206,7 @@ namespace Coracle.Raft.Engine.Actions.Core
                     {
                         Term = currentTerm,
                         Success = false,
-                        FirstIndexOfConflictingEntryTermOnFailure = await Input.PersistentState.LogEntries.GetFirstIndexForTerm(Input.Request.PreviousLogTerm),
+                        FirstIndexOfConflictingEntryTermOnFailure = await Input.PersistentState.GetFirstIndexForTerm(Input.Request.PreviousLogTerm),
                         ConflictingEntryTermOnFailure = Input.Request.PreviousLogTerm
                     };
 
@@ -222,13 +223,13 @@ namespace Coracle.Raft.Engine.Actions.Core
                 }
                 else
                 {
-                    var validTerm = await Input.PersistentState.LogEntries.FindValidTermPreviousTo(Input.Request.PreviousLogTerm);
+                    var validTerm = await Input.PersistentState.FindValidTermPreviousTo(Input.Request.PreviousLogTerm);
 
                     response = new AppendEntriesRPCResponse
                     {
                         Term = currentTerm,
                         Success = false,
-                        FirstIndexOfConflictingEntryTermOnFailure = await Input.PersistentState.LogEntries.GetFirstIndexForTerm(validTerm),
+                        FirstIndexOfConflictingEntryTermOnFailure = await Input.PersistentState.GetFirstIndexForTerm(validTerm),
                         ConflictingEntryTermOnFailure = validTerm
                     };
 
@@ -259,7 +260,7 @@ namespace Coracle.Raft.Engine.Actions.Core
                 {
                     Term = currentTerm,
                     Success = false,
-                    FirstIndexOfConflictingEntryTermOnFailure = await Input.PersistentState.LogEntries.GetFirstIndexForTerm(logEntryAtPreviousIndex.Term),
+                    FirstIndexOfConflictingEntryTermOnFailure = await Input.PersistentState.GetFirstIndexForTerm(logEntryAtPreviousIndex.Term),
                     ConflictingEntryTermOnFailure = logEntryAtPreviousIndex.Term,
                 };
 
@@ -325,13 +326,13 @@ namespace Coracle.Raft.Engine.Actions.Core
                 .With(ActivityParam.New(foundConfigEntry, isConfigEntryPresent))
                 .WithCallerInfo());
 
-                await Input.PersistentState.LogEntries.OverwriteEntries(Input.Request.Entries);
+                await Input.PersistentState.OverwriteEntries(Input.Request.Entries);
 
                 if (isConfigEntryPresent)
                 {
                     Input.ClusterConfigurationChanger.ApplyConfiguration(new ClusterMembershipChange
                     {
-                        Configuration = await Input.PersistentState.LogEntries.ReadFrom(configurationLogEntry: configurationLogEntry),
+                        Configuration = await Input.PersistentState.ReadFrom(configurationLogEntry: configurationLogEntry),
                         ConfigurationLogEntryIndex = configurationLogEntry.CurrentIndex
                     });
                 }

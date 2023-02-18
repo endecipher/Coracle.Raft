@@ -54,7 +54,7 @@ namespace Coracle.Raft.Engine.Discovery
         /// </summary>
         /// <param name="membershipChange"></param>
         /// <returns></returns>
-        public void ApplyConfiguration(ClusterMembershipChange membershipChange, bool tryForReplication = false)
+        public void ApplyConfiguration(ClusterMembershipChange membershipChange, bool tryForReplication = false, bool isInstallingSnapshot = false)
         {
             ActivityLogger?.Log(new CoracleActivity
             {
@@ -68,6 +68,17 @@ namespace Coracle.Raft.Engine.Discovery
 
             bool isThisNodeLeader = LeaderNodePronouncer.IsLeaderRecognized && LeaderNodePronouncer.RecognizedLeaderConfiguration.UniqueNodeId.Equals(thisNodeId);
             bool isThisNodeInNewCluster = membershipChange.Configuration.Any(x => x.UniqueNodeId.Equals(thisNodeId));
+
+
+            /// Once the entire snapshot is received, if this node is not present in the snapshot's cluster configuration, 
+            /// then it is safe to assume, that the snapshot represents old configuration.
+            /// Once the entire snapshot is received, then appendEntries will continue normally, and then we would receive the last configuration entry.
+            /// The last/most recent configuration from the leader can then be parsed and then applied to the node within that AppendEntries call
+            if (isInstallingSnapshot && !isThisNodeInNewCluster)
+            {
+                return;
+            }
+
 
             if (!isThisNodeInNewCluster)
             {

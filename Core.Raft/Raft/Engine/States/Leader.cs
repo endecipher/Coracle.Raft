@@ -12,7 +12,6 @@ namespace Coracle.Raft.Engine.States
     internal interface ILeaderDependencies : IStateDependencies
     {
         IHeartbeatTimer HeartbeatTimer { get; set; }
-        ILeaderNodePronouncer LeaderNodePronouncer { get; set; }
         ILeaderVolatileProperties LeaderProperties { get; set; }
         IAppendEntriesManager AppendEntriesManager { get; set; }
     }
@@ -40,7 +39,6 @@ namespace Coracle.Raft.Engine.States
 
         #region Additional Dependencies
         public IHeartbeatTimer HeartbeatTimer { get; set; }
-        public ILeaderNodePronouncer LeaderNodePronouncer { get; set; }
         public ILeaderVolatileProperties LeaderProperties { get; set; }
         public IAppendEntriesManager AppendEntriesManager { get; set; }
         #endregion
@@ -116,7 +114,7 @@ namespace Coracle.Raft.Engine.States
             /// 
             /// Append No-Op Entries with Current Term
             /// </remarks>
-            var task = PersistentState.LogEntries.AppendNoOperationEntry();
+            var task = PersistentState.AppendNoOperationEntry();
             task.Wait();
 
 
@@ -159,29 +157,34 @@ namespace Coracle.Raft.Engine.States
 
             var currentTerm = await PersistentState.GetCurrentTerm();
 
-            var lastLogEntryIndexForTerm = await PersistentState.LogEntries.GetLastIndexForTerm(currentTerm);
+            var lastLogEntryIndexForTerm = await PersistentState.GetLastIndexForTerm(currentTerm);
 
-            var firstLogEntryIndexForTerm = (await PersistentState.LogEntries.GetFirstIndexForTerm(currentTerm)).Value;
+            var firstLogEntryIndexForTerm = (await PersistentState.GetFirstIndexForTerm(currentTerm)).Value;
 
             for (long i = lastLogEntryIndexForTerm; i > VolatileState.CommitIndex && i >= firstLogEntryIndexForTerm; i--)
             {
-                /// <remarks>
-                /// Raft never commits log entries from previous terms by counting replicas. Only log entries from the leader’s current
-                /// term are committed by counting replicas; once an entry from the current term has been committed in this way, 
-                /// then all prior entries are committed indirectly because of the Log Matching Property.
-                /// 
-                /// There are some situations where a leader could safely conclude that an older log entry is committed (for example, 
-                /// if that entry is stored on every server), but Raft takes a more conservative approach for simplicity.
-                /// <seealso cref="Section 5.4.2 Committing Entries from previous Terms"/>
-                /// </remarks>
-                long logTerm = await PersistentState.LogEntries.GetTermAtIndex(i);
+                Logs.LogEntry logEntry = await PersistentState.TryGetValueAtIndex(i);
 
-                if (LeaderProperties.AreMajorityOfServersHavingEntriesUpUntilIndexReplicated(i) && logTerm == currentTerm)
+                if (logEntry != null)
                 {
-                    //TODO: Introduce Object Locks
-                    UpdateCommitIndex(i);
+                    /// <remarks>
+                    /// Raft never commits log entries from previous terms by counting replicas. Only log entries from the leader’s current
+                    /// term are committed by counting replicas; once an entry from the current term has been committed in this way, 
+                    /// then all prior entries are committed indirectly because of the Log Matching Property.
+                    /// 
+                    /// There are some situations where a leader could safely conclude that an older log entry is committed (for example, 
+                    /// if that entry is stored on every server), but Raft takes a more conservative approach for simplicity.
+                    /// <seealso cref="Section 5.4.2 Committing Entries from previous Terms"/>
+                    /// </remarks>
+                    long logTerm = logEntry.Term;
 
-                    return;
+                    if (LeaderProperties.AreMajorityOfServersHavingEntriesUpUntilIndexReplicated(i) && logTerm == currentTerm)
+                    {
+                        //TODO: Introduce Object Locks
+                        UpdateCommitIndex(i);
+
+                        return;
+                    }
                 }
             }
         }

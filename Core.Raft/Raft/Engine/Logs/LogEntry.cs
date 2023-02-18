@@ -1,4 +1,5 @@
 ﻿using Coracle.Raft.Engine.Configuration.Cluster;
+using Coracle.Raft.Engine.Actions.Core;
 using System;
 
 namespace Coracle.Raft.Engine.Logs
@@ -58,6 +59,11 @@ namespace Coracle.Raft.Engine.Logs
             /// Signifies that the underlying Contents are actually an enumerable of <see cref="NodeConfiguration"/> 
             /// </summary>
             Configuration = 4,
+
+            /// <summary>
+            /// Signifies that the underlying Contents are actually a <see cref="ISnapshotFile"/> and that the logEntry's Index and Term indicate the <see cref="ISnapshotFile.LastIncludedIndex"/> and <see cref="ISnapshotFile.LastIncludedTerm"/>
+            /// </summary>
+            Snapshot = 8
         }
     }
 

@@ -1,6 +1,5 @@
 ﻿using ActivityLogger.Logging;
 using Coracle.IntegrationTests.Components.Discovery;
-using Coracle.IntegrationTests.Components.PersistentData;
 using Coracle.IntegrationTests.Components.Logging;
 using Coracle.IntegrationTests.Components.Remoting;
 using Coracle.Raft.Engine.ClientHandling;
@@ -11,6 +10,7 @@ using Coracle.Raft.Engine.Remoting;
 using TaskGuidance.BackgroundProcessing.Dependencies;
 using Coracle.Samples.ClientHandling.Notes;
 using Coracle.Samples.ClientHandling;
+using Coracle.Samples.PersistentData;
 
 namespace Coracle.IntegrationTests.Components.Registries
 {

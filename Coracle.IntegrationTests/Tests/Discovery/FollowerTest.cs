@@ -1,6 +1,5 @@
 ﻿using ActivityLogger.Logging;
 using Coracle.Samples.ClientHandling.Notes;
-using Coracle.IntegrationTests.Components.PersistentData;
 using Coracle.IntegrationTests.Components.Remoting;
 using Coracle.Raft.Engine.Actions.Awaiters;
 using Coracle.Raft.Engine.Actions.Core;
@@ -24,6 +23,7 @@ using TaskGuidance.BackgroundProcessing.Core;
 using Xunit;
 using Coracle.Samples.ClientHandling.NoteCommand;
 using Coracle.Raft.Engine.Logs;
+using Coracle.Samples.PersistentData;
 
 namespace Coracle.IntegrationTests.Framework
 {
@@ -64,7 +64,7 @@ namespace Coracle.IntegrationTests.Framework
 #region Act
 
             var term = await Context.GetService<IPersistentProperties>().GetCurrentTerm();
-            var entry = await Context.GetService<IPersistentProperties>().LogEntries.TryGetValueAtLastIndex();
+            var entry = await Context.GetService<IPersistentProperties>().TryGetValueAtLastIndex();
 
             try
             {
@@ -190,7 +190,7 @@ namespace Coracle.IntegrationTests.Framework
 
             var afterAppendEntries = CaptureStateProperties();
 
-            var lastEntry = await Context.GetService<IPersistentProperties>().LogEntries.TryGetValueAtLastIndex();
+            var lastEntry = await Context.GetService<IPersistentProperties>().TryGetValueAtLastIndex();
 
             #endregion
 
@@ -299,7 +299,7 @@ namespace Coracle.IntegrationTests.Framework
 
             var afterAppendEntries = CaptureStateProperties();
 
-            var lastEntry = await Context.GetService<IPersistentProperties>().LogEntries.TryGetValueAtLastIndex();
+            var lastEntry = await Context.GetService<IPersistentProperties>().TryGetValueAtLastIndex();
 
             #endregion
 
@@ -420,7 +420,7 @@ namespace Coracle.IntegrationTests.Framework
 
             var afterAppendEntries = CaptureStateProperties();
 
-            var lastEntry = await Context.GetService<IPersistentProperties>().LogEntries.TryGetValueAtLastIndex();
+            var lastEntry = await Context.GetService<IPersistentProperties>().TryGetValueAtLastIndex();
 
             #endregion
 
@@ -534,7 +534,7 @@ namespace Coracle.IntegrationTests.Framework
 
             var afterAppendEntries = CaptureStateProperties();
 
-            var lastEntry = await Context.GetService<IPersistentProperties>().LogEntries.TryGetValueAtLastIndex();
+            var lastEntry = await Context.GetService<IPersistentProperties>().TryGetValueAtLastIndex();
 
             #endregion
 
@@ -626,9 +626,9 @@ namespace Coracle.IntegrationTests.Framework
 
             var (newCommand, newNote) = TestAddCommand();
 
-            var previouslyAddedCommandEntry = await Context.GetService<IPersistentProperties>().LogEntries.TryGetValueAtIndex(2);
+            var previouslyAddedCommandEntry = await Context.GetService<IPersistentProperties>().TryGetValueAtIndex(2);
 
-            var previouslyAddedCommand = await Context.GetService<IPersistentProperties>().LogEntries.ReadFrom<NoteCommand>(previouslyAddedCommandEntry);
+            var previouslyAddedCommand = await Context.GetService<IPersistentProperties>().ReadFrom<NoteCommand>(previouslyAddedCommandEntry);
 
             #endregion
 
@@ -669,7 +669,7 @@ namespace Coracle.IntegrationTests.Framework
 
             var afterAppendEntries = CaptureStateProperties();
 
-            var lastEntry = await Context.GetService<IPersistentProperties>().LogEntries.TryGetValueAtLastIndex();
+            var lastEntry = await Context.GetService<IPersistentProperties>().TryGetValueAtLastIndex();
 
             bool isPreviousNoteCommandExecuted = Context.GetService<INotes>().TryGet(GetNoteHeader(lastCommandCounter), out var previousNote);
 
@@ -749,6 +749,320 @@ namespace Coracle.IntegrationTests.Framework
 
 
 
+            #endregion
+        }
+
+
+        [Fact]
+        [Order(7)]
+        public async Task IsFollowerRebuildingStateOnSnapshotSuccessfully()
+        {
+            #region Arrange
+
+            Exception caughtException = null;
+
+            var (newCommand1, newNote1) = TestAddCommand();
+            var (newCommand2, newNote2) = TestAddCommand();
+
+            var followerConfigurationBeforeSnapshot = Context.GetService<IClusterConfiguration>().CurrentConfiguration;
+
+            var followerLogEntriesBeforeSnapshot = await GetAllLogEntries();
+
+            var followerLastEntryBeforeSnapshot = followerLogEntriesBeforeSnapshot.Last();
+
+            var logEntriesToCompact = new List<LogEntry>(followerLogEntriesBeforeSnapshot);
+
+            logEntriesToCompact.AddRange(new[]
+            {
+                new LogEntry
+                {
+                    CurrentIndex = followerLastEntryBeforeSnapshot.CurrentIndex + 1,
+                    Type = LogEntry.Types.Command,
+                    Term = 1,
+                    Content = newCommand1
+                },
+                new LogEntry
+                {
+                    CurrentIndex = followerLastEntryBeforeSnapshot.CurrentIndex + 2,
+                    Type = LogEntry.Types.Command,
+                    Term = 2,
+                    Content = newCommand2
+                },
+            });
+
+            var leaderSnapshotManager = new SnapshotManager(Context.GetService<IActivityLogger>());
+            var snapshot = await leaderSnapshotManager.CreateFile(logEntriesToCompact, followerConfigurationBeforeSnapshot);
+            var snapshotFile = await leaderSnapshotManager.GetFile(snapshot);
+            var snapshotFileLastOffset = await snapshotFile.GetLastOffset();
+
+            Queue<Operation<IInstallSnapshotRPCResponse>> installationResponses = new Queue<Operation<IInstallSnapshotRPCResponse>>();
+
+            var queue = CaptureActivities();
+
+            var rebuildingNotes = queue
+                .AttachNotifier(_ => _.Is(Notes.NoteEntity, Notes.Rebuilt))
+                .RemoveOnceMatched();
+
+            var applyingConfigurationFromSnapshot = queue
+                .AttachNotifier(_ => _.Is(OnExternalInstallSnapshotChunkRPCReceive.ActionName, OnExternalInstallSnapshotChunkRPCReceive.ApplyingConfigurationFromSnapshot))
+                .RemoveOnceMatched();
+
+            var acknowledgedSnapshots = queue
+                .AttachNotifier(_ => _.Is(OnExternalInstallSnapshotChunkRPCReceive.ActionName, OnExternalInstallSnapshotChunkRPCReceive.Acknowledged))
+                .RemoveOnceMatched();
+
+            #endregion
+
+            #region Act
+
+            try
+            {
+                for (int offset = 0; offset <= snapshotFileLastOffset; offset++)
+                {
+                    var chunkData = await snapshotFile.ReadDataAt(offset);
+
+                    var response = await Context.GetService<IExternalRpcHandler>().RespondTo(new InstallSnapshotRPC
+                    {
+                        Term = 2,
+                        LastIncludedTerm = snapshot.LastIncludedTerm,
+                        LastIncludedIndex = snapshot.LastIncludedIndex,
+                        SnapshotId = snapshot.SnapshotId,
+                        LeaderId = MockNodeA,
+                        Data = chunkData,
+                        Offset = offset,
+                        Done = offset == snapshotFileLastOffset
+                    }, CancellationToken.None);
+
+                    installationResponses.Enqueue(response);
+                }
+
+                applyingConfigurationFromSnapshot.Wait(EventNotificationTimeOut);
+
+                rebuildingNotes.Wait(EventNotificationTimeOut);
+
+                acknowledgedSnapshots.Wait(EventNotificationTimeOut);
+            }
+            catch (Exception e)
+            {
+                caughtException = e;
+            }
+
+            var afterSnapshot = CaptureStateProperties();
+
+            var followerEntriesAfterSnapshot = await GetAllLogEntries();
+
+            #endregion
+
+            #region Assertions
+
+            var assertableQueue = StartAssertions(queue);
+
+            caughtException
+                .Should().Be(null, $"Act should occur successfully");
+
+            applyingConfigurationFromSnapshot.IsConditionMatched.Should().BeTrue();
+            rebuildingNotes.IsConditionMatched.Should().BeTrue();
+            acknowledgedSnapshots.IsConditionMatched.Should().BeTrue();
+
+            followerEntriesAfterSnapshot.Count
+                .Should()
+                .BeLessThan(followerLogEntriesBeforeSnapshot.Count, "As the logEntries were replaced with a more compact snapshot");
+
+            followerLastEntryBeforeSnapshot
+                .CurrentIndex
+                .Should().BeLessThan(followerEntriesAfterSnapshot.Last().CurrentIndex, "As additional entries were sent as part of the snapshot");
+
+            afterSnapshot
+                .CurrentTerm
+                .Should().Be(2, $"As Follower should update its term, since an external RPC is received with a higher term");
+
+            afterSnapshot
+                .StateValue
+                .Should().Be(StateValues.Follower, "As it should still be a follower");
+
+            afterSnapshot
+                .VotedFor
+                .Should().Be(MockNodeA, "As the vote should still be granted to the previous sender");
+
+            afterSnapshot
+                .LastApplied
+                .Should().Be(snapshot.LastIncludedIndex, "As the follower has applied the snapshot state");
+
+            afterSnapshot
+                .CommitIndex
+                .Should().Be(snapshot.LastIncludedIndex, "As the follower has applied the snapshot state, it makes sense that it has also updated commit index");
+
+            installationResponses.Select(_ => _.Response).First()
+                .Term
+                .Should().Be(2, "As the term updation should also be reflected when sending the response back");
+
+            Context.GetService<INotes>().HasNote(newNote2).Should().BeTrue("As the notes was rebuilt from the snapshot, it should be present");
+
+            Cleanup();
+            #endregion
+        }
+
+
+
+
+        [Fact]
+        [Order(8)]
+        public async Task IsFollowerApplyingCommandEntriesSuccessfullyAfterSnapshot()
+        {
+            #region Arrange
+
+            Exception caughtException = null;
+
+            Operation<IAppendEntriesRPCResponse> appendEntriesResponse = null;
+
+            var queue = CaptureActivities();
+
+            var writingEntries = queue
+                .AttachNotifier(_ => _.Is(OnExternalAppendEntriesRPCReceive.ActionName, OnExternalAppendEntriesRPCReceive.OverwritingEntriesIfAny))
+                .RemoveOnceMatched();
+
+            var commitIndexUpdated = queue
+                .AttachNotifier(_ => _.Is(AbstractState.Entity, AbstractState.ApplyingLogEntry))
+                .RemoveOnceMatched();
+
+            var followerLogEntriesBeforeRPC = await GetAllLogEntries();
+
+            var (newCommand, newNote) = TestAddCommand();
+            var (newCommand2, newNote2) = TestAddCommand();
+
+            #endregion
+
+            #region Act
+
+            var termBeforeRPC = await Context.GetService<IPersistentProperties>().GetCurrentTerm();
+
+            var commandEntry1_LeaderCommitted = new LogEntry
+            {
+                CurrentIndex = followerLogEntriesBeforeRPC.Last().CurrentIndex + 1,
+                Term = termBeforeRPC,
+                Type = LogEntry.Types.Command,
+                Content = newCommand
+            };
+
+            var commandEntry2_LeaderUnCommitted = new LogEntry
+            {
+                CurrentIndex = followerLogEntriesBeforeRPC.Last().CurrentIndex + 2,
+                Term = termBeforeRPC,
+                Type = LogEntry.Types.Command,
+                Content = newCommand2
+            };
+
+            try
+            {
+                /// <remarks>
+                /// Considering a scenario that the Leader has made sure this follower node as the snapshot, but since snapshot are always made in a stable context,
+                /// We can be sure that there are more entries that belong to the leader. 
+                /// 
+                /// Thus, Snapshot.LastIncludedIndex < Leader Commit Index
+                /// 
+                /// Another thing is, the leader will then send the entries between the MatchIndex (i.e Snapshot.LastIncludedIndex) and NextIndex (i.e LastLogIndex), it may be the case that the LastLogIndex is more than the CommitIndex, and this node is trying to replicate that as well.
+                /// Therefore, we can have 2 command entries. 1 which would be committed, and one which would be not.
+                /// 
+                /// And thus, command1 would have been applied, but not command2. 
+                /// </remarks>
+
+                appendEntriesResponse = await Context.GetService<IExternalRpcHandler>().RespondTo(new AppendEntriesRPC(entries: new List<LogEntry>
+                {
+                    commandEntry1_LeaderCommitted, commandEntry2_LeaderUnCommitted
+                })
+                {
+                    LeaderCommitIndex = commandEntry1_LeaderCommitted.CurrentIndex, 
+                    PreviousLogIndex = commandEntry1_LeaderCommitted.CurrentIndex - 1, 
+                    PreviousLogTerm = commandEntry1_LeaderCommitted.Term, 
+                    LeaderId = MockNodeA,
+                    Term = commandEntry1_LeaderCommitted.Term
+                }, CancellationToken.None);
+
+                writingEntries.Wait(EventNotificationTimeOut);
+
+                commitIndexUpdated.Wait(EventNotificationTimeOut);
+            }
+            catch (Exception e)
+            {
+                caughtException = e;
+            }
+
+            var afterAppendEntries = CaptureStateProperties();
+
+            var lastEntry = await Context.GetService<IPersistentProperties>().TryGetValueAtLastIndex();
+
+            #endregion
+
+            #region Assertions
+
+            var assertableQueue = StartAssertions(queue);
+
+            caughtException
+                .Should().Be(null, $"Act should occur successfully");
+
+            writingEntries
+                .IsConditionMatched
+                .Should().BeTrue("Concerned activity should be logged");
+
+            lastEntry
+                .CurrentIndex
+                .Should().Be(commandEntry2_LeaderUnCommitted.CurrentIndex, $"As additional command entries have been appended, and {nameof(commandEntry2_LeaderUnCommitted)} is the last one");
+
+            lastEntry
+                .Term
+                .Should().Be(commandEntry2_LeaderUnCommitted.Term, "As the term should be same as before");
+
+            lastEntry
+                .Type
+                .Should().Be(LogEntry.Types.Command, "As the appended entry must be a command entry");
+
+            afterAppendEntries
+                .CurrentTerm
+                .Should().Be(termBeforeRPC, $"As it should not update the term, since the term is already updated from the prev test case");
+
+            afterAppendEntries
+                .StateValue
+                .Should().Be(StateValues.Follower, "As it should still be a follower");
+
+            afterAppendEntries
+                .VotedFor
+                .Should().Be(MockNodeA, "As the vote should still be granted to the previous sender");
+
+            afterAppendEntries
+                .LastApplied
+                .Should().Be(commandEntry1_LeaderCommitted.CurrentIndex, $"As the leader commit index sent is not pointing to {commandEntry2_LeaderUnCommitted.CurrentIndex}, the follower can update its own commit index as new entries ARE ALSO being sent. Therefore, it should update maximum upto the leader commit index which would be consisting of the command entry {nameof(commandEntry1_LeaderCommitted)}");
+
+            afterAppendEntries
+                .CommitIndex
+                .Should().Be(commandEntry1_LeaderCommitted.CurrentIndex, $"As the leader commit index sent is not pointing to {commandEntry2_LeaderUnCommitted.CurrentIndex}, the follower can update its own commit index as new entries ARE ALSO being sent. Therefore, it should update maximum upto the leader commit index which would be consisting of the command entry {nameof(commandEntry1_LeaderCommitted)}");
+
+            appendEntriesResponse
+                .HasResponse
+                .Should().BeTrue("As a RPC response is expected without a failure");
+
+            appendEntriesResponse
+                .Response.Term
+                .Should().Be(termBeforeRPC, $"As it should not update the term, since the term is already updated from the prev test case {IsFollowerUpdatingTermToHigherReceivedValue}");
+
+            appendEntriesResponse
+                .Response.Success
+                .Should().BeTrue("As acknowledgement should be successful");
+
+            appendEntriesResponse
+               .Response.ConflictingEntryTermOnFailure
+               .Should().BeNull("As there should be no conflicts");
+
+            appendEntriesResponse
+               .Response.FirstIndexOfConflictingEntryTermOnFailure
+               .Should().BeNull("As there should be no conflicts");
+
+            Context.GetService<INotes>().HasNote(newNote)
+                .Should().BeTrue($"As the command {commandEntry1_LeaderCommitted} should have been applied, and this note should be avaiable, since the LeaderCommitIndex supplied is accomodating the corresponding log entry");
+
+            Context.GetService<INotes>().HasNote(newNote2)
+                .Should().BeFalse($"As the command {commandEntry2_LeaderUnCommitted} should not have been applied, and this note should not be avaiable as the corresponding log entry was not committed by leader yet, and thus sohuld not have been applied to the follower state machine");
+
+            Cleanup();
             #endregion
         }
     }

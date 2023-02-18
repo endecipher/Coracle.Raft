@@ -1,6 +1,5 @@
 ﻿using ActivityLogger.Logging;
 using Coracle.Samples.ClientHandling.Notes;
-using Coracle.IntegrationTests.Components.PersistentData;
 using Coracle.IntegrationTests.Components.Remoting;
 using Coracle.Raft.Engine.Actions.Awaiters;
 using Coracle.Raft.Engine.Actions.Core;
@@ -55,8 +54,8 @@ namespace Coracle.IntegrationTests.Framework
 
             try
             {
-                entry = await Context.GetService<IPersistentProperties>().LogEntries.TryGetValueAtLastIndex();
-                allEntries = Context.GetService<IPersistentProperties>().LogEntries.GetAll().ToList();
+                entry = await Context.GetService<IPersistentProperties>().TryGetValueAtLastIndex();
+                allEntries = Context.GetService<IPersistentProperties>().GetAll().ToList();
 
             }
             catch (Exception e)
@@ -128,15 +127,15 @@ namespace Coracle.IntegrationTests.Framework
                     Type = LogEntry.Types.NoOperation,
                 };
 
-                await Context.GetService<IPersistentProperties>().LogEntries.OverwriteEntries(new List<LogEntry>
+                await Context.GetService<IPersistentProperties>().OverwriteEntries(new List<LogEntry>
                 {
                     initialEntry,
                     noOpEntry
                 });
 
-                lastEntry = await Context.GetService<IPersistentProperties>().LogEntries.TryGetValueAtLastIndex();
+                lastEntry = await Context.GetService<IPersistentProperties>().TryGetValueAtLastIndex();
 
-                allEntries = Context.GetService<IPersistentProperties>().LogEntries.GetAll().ToList();
+                allEntries = Context.GetService<IPersistentProperties>().GetAll().ToList();
 
             }
             catch (Exception e)
@@ -207,15 +206,15 @@ namespace Coracle.IntegrationTests.Framework
 
             try
             {
-                await Context.GetService<IPersistentProperties>().LogEntries.OverwriteEntries(new List<LogEntry>
+                await Context.GetService<IPersistentProperties>().OverwriteEntries(new List<LogEntry>
                 {
                     initialEntry,
                     commandEntry
                 });
 
-                lastEntry = await Context.GetService<IPersistentProperties>().LogEntries.TryGetValueAtLastIndex();
+                lastEntry = await Context.GetService<IPersistentProperties>().TryGetValueAtLastIndex();
 
-                allEntries = Context.GetService<IPersistentProperties>().LogEntries.GetAll().ToList();
+                allEntries = Context.GetService<IPersistentProperties>().GetAll().ToList();
 
             }
             catch (Exception e)

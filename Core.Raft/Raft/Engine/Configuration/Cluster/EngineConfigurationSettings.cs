@@ -29,6 +29,13 @@ namespace Coracle.Raft.Engine.Configuration.Cluster
         public int CatchUpOfNewNodesTimeout_InMilliseconds { get; set; }
         public int CatchUpOfNewNodesWaitInterval_InMilliseconds { get; set; }
         public int CheckDepositionWaitInterval_InMilliseconds { get; set; }
+        public int InstallSnapshotChunkTimeoutOnSend_InMilliseconds { get; set; }
+        public int InstallSnapshotChunkTimeoutOnReceive_InMilliseconds { get; set; }
+        public int CompactionAttemptTimeout_InMilliseconds { get; set; }
+        public int CompactionAttemptInterval_InMilliseconds { get; set; }
+        public int CompactionWaitPeriod_InMilliseconds { get; set; }
+        public int SnapshotThresholdSize { get; set; }
+        public int SnapshotBufferSizeFromLastEntry { get; set; }
 
         public void ApplyFrom(IEngineConfiguration newConfig)
         {
@@ -58,7 +65,13 @@ namespace Coracle.Raft.Engine.Configuration.Cluster
             CatchUpOfNewNodesTimeout_InMilliseconds = newConfig.CatchUpOfNewNodesTimeout_InMilliseconds;
             CatchUpOfNewNodesWaitInterval_InMilliseconds = newConfig.CatchUpOfNewNodesWaitInterval_InMilliseconds;
             CheckDepositionWaitInterval_InMilliseconds = newConfig.CheckDepositionWaitInterval_InMilliseconds;
-
+            InstallSnapshotChunkTimeoutOnSend_InMilliseconds = newConfig.InstallSnapshotChunkTimeoutOnSend_InMilliseconds;
+            InstallSnapshotChunkTimeoutOnReceive_InMilliseconds = newConfig.InstallSnapshotChunkTimeoutOnReceive_InMilliseconds;
+            CompactionAttemptTimeout_InMilliseconds = newConfig.CompactionAttemptTimeout_InMilliseconds;
+            CompactionAttemptInterval_InMilliseconds = newConfig.CompactionAttemptInterval_InMilliseconds;
+            CompactionWaitPeriod_InMilliseconds = newConfig.CompactionWaitPeriod_InMilliseconds;
+            SnapshotThresholdSize = newConfig.SnapshotThresholdSize;
+            SnapshotBufferSizeFromLastEntry = newConfig.SnapshotBufferSizeFromLastEntry;
         }
     }
 }

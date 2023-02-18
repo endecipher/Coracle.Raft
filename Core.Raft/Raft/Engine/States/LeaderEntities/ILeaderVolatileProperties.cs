@@ -1,4 +1,6 @@
-﻿using Coracle.Raft.Engine.Configuration;
+﻿using Coracle.Raft.Engine.Actions.Core;
+using Coracle.Raft.Engine.Configuration;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace Coracle.Raft.Engine.States.LeaderEntities
@@ -12,5 +14,6 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
         bool TryGetMatchIndex(string externalServerId, out long matchIndex);
         bool TryGetNextIndex(string externalServerId, out long nextIndex);
         void UpdateIndices(string externalServerId, long maxIndexReplicated);
+        Task<IDictionary<string, ISnapshotHeader>> RequiresSnapshot();
     }
 }

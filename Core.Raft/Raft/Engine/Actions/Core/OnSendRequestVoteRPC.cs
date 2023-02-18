@@ -54,7 +54,7 @@ namespace Coracle.Raft.Engine.Actions.Core
         /// <returns></returns>
         protected override async Task<IRequestVoteRPCResponse> Action(CancellationToken cancellationToken)
         {
-            var lastLogEntry = await Input.PersistentState.LogEntries.TryGetValueAtLastIndex();
+            var lastLogEntry = await Input.PersistentState.TryGetValueAtLastIndex();
 
             var callObject = new RequestVoteRPC
             {

@@ -1,6 +1,5 @@
 ﻿using ActivityLogger.Logging;
 using Coracle.Samples.ClientHandling.Notes;
-using Coracle.IntegrationTests.Components.PersistentData;
 using Coracle.IntegrationTests.Components.Remoting;
 using Coracle.Raft.Engine.Actions.Awaiters;
 using Coracle.Raft.Engine.Actions.Core;
@@ -23,6 +22,7 @@ using FluentAssertions;
 using TaskGuidance.BackgroundProcessing.Core;
 using Xunit;
 using Coracle.Samples.ClientHandling.NoteCommand;
+using Coracle.Samples.PersistentData;
 
 namespace Coracle.IntegrationTests.Framework
 {
@@ -580,8 +580,8 @@ namespace Coracle.IntegrationTests.Framework
             var notifiableQueue = CaptureActivities();
 
             var previousTerm = await Context.GetService<IPersistentProperties>().GetCurrentTerm() - 1;
-            var lastLogIndexOfPrevTerm = await Context.GetService<IPersistentProperties>().LogEntries.GetLastIndexForTerm(previousTerm);
-            var incompleteLogEntries = await Context.GetService<IPersistentProperties>().LogEntries.FetchLogEntriesBetween(0, lastLogIndexOfPrevTerm);
+            var lastLogIndexOfPrevTerm = await Context.GetService<IPersistentProperties>().GetLastIndexForTerm(previousTerm);
+            var incompleteLogEntries = await Context.GetService<IPersistentProperties>().FetchLogEntriesBetween(0, lastLogIndexOfPrevTerm);
 
             #endregion
 
@@ -656,10 +656,6 @@ namespace Coracle.IntegrationTests.Framework
             assertableQueue
                 .Dig()
                 .UntilItSatisfies(_ => _.Is(OnExternalRequestVoteRPCReceive.ActionName, OnExternalRequestVoteRPCReceive.DeniedDueToLesserTerm), "The denial should be stemmed from this event");
-
-            assertableQueue
-                .Dig()
-                .UntilItSatisfies(_ => _.Is(OnExternalAppendEntriesRPCReceive.ActionName, OnExternalAppendEntriesRPCReceive.DeniedDueToNonExistentPreviousIndex), "The denial should be stemmed from this event");
 
             Cleanup();
             #endregion
@@ -846,7 +842,7 @@ namespace Coracle.IntegrationTests.Framework
                         && x.Has(CurrentStateAccessor.newState, nameof(StateValues.Follower))).RemoveOnceMatched();
 
             var currentTerm = await Context.GetService<IPersistentProperties>().GetCurrentTerm();
-            var lastLogIndexOfCurrentTerm = await Context.GetService<IPersistentProperties>().LogEntries.GetLastIndex();
+            var lastLogIndexOfCurrentTerm = await Context.GetService<IPersistentProperties>().GetLastIndex();
 
             #endregion
 

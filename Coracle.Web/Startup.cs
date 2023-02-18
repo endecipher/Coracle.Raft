@@ -11,7 +11,6 @@ using CorrelationId.Abstractions;
 using Coracle.Raft.Engine.Discovery;
 using Coracle.Samples.ClientHandling.Notes;
 using Coracle.Samples.ClientHandling;
-using Coracle.IntegrationTests.Components.PersistentData;
 using Coracle.Web.Controllers;
 using Coracle.Web.Impl.Logging;
 using Coracle.Web.Impl.Discovery;
@@ -19,6 +18,7 @@ using Coracle.Web.Impl.Node;
 using Coracle.Web.Impl.Remoting;
 using Coracle.Web.Impl.Configuration;
 using TaskGuidance.BackgroundProcessing.Dependencies;
+using Coracle.Samples.PersistentData;
 
 namespace Coracle.Web
 {
@@ -52,6 +52,13 @@ namespace Coracle.Web
         public int CatchUpOfNewNodesTimeout_InMilliseconds { get; set; }
         public int CatchUpOfNewNodesWaitInterval_InMilliseconds { get; set; }
         public int CheckDepositionWaitInterval_InMilliseconds { get; set; }
+        public int InstallSnapshotChunkTimeoutOnSend_InMilliseconds { get; set; }
+        public int InstallSnapshotChunkTimeoutOnReceive_InMilliseconds { get; set; }
+        public int CompactionAttemptTimeout_InMilliseconds { get; set; }
+        public int CompactionAttemptInterval_InMilliseconds { get; set; }
+        public int CompactionWaitPeriod_InMilliseconds { get; set; }
+        public int SnapshotThresholdSize { get; set; }
+        public int SnapshotBufferSizeFromLastEntry { get; set; }
 
         public void ApplyFrom(IEngineConfiguration newConfig)
         {
@@ -80,7 +87,13 @@ namespace Coracle.Web
             CatchUpOfNewNodesTimeout_InMilliseconds = newConfig.CatchUpOfNewNodesTimeout_InMilliseconds;
             CatchUpOfNewNodesWaitInterval_InMilliseconds = newConfig.CatchUpOfNewNodesWaitInterval_InMilliseconds;
             CheckDepositionWaitInterval_InMilliseconds = newConfig.CheckDepositionWaitInterval_InMilliseconds;
-
+            InstallSnapshotChunkTimeoutOnSend_InMilliseconds = newConfig.InstallSnapshotChunkTimeoutOnSend_InMilliseconds;
+            InstallSnapshotChunkTimeoutOnReceive_InMilliseconds = newConfig.InstallSnapshotChunkTimeoutOnReceive_InMilliseconds;
+            CompactionAttemptTimeout_InMilliseconds = newConfig.CompactionAttemptTimeout_InMilliseconds;
+            CompactionAttemptInterval_InMilliseconds = newConfig.CompactionAttemptInterval_InMilliseconds;
+            CompactionWaitPeriod_InMilliseconds = newConfig.CompactionWaitPeriod_InMilliseconds;
+            SnapshotThresholdSize = newConfig.SnapshotThresholdSize;
+            SnapshotBufferSizeFromLastEntry = newConfig.SnapshotBufferSizeFromLastEntry;
         }
     }
 
@@ -114,6 +127,7 @@ namespace Coracle.Web
             services.AddSingleton<INotes, Notes>();
             services.AddSingleton<IRemoteManager, HttpRemoteManager>();
             services.AddSingleton<IClientRequestHandler, TestClientRequestHandler>();
+            services.AddSingleton<ISnapshotManager, SnapshotManager>();
             services.AddSingleton<IPersistentProperties, TestStateProperties>();
             services.AddSingleton<ITaskProcessorConfiguration, TaskProcessorConfiguration>();
             services.AddSingleton<IActivityLogger, WebActivityLogger>();
