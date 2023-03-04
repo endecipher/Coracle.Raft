@@ -9,19 +9,11 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using Coracle.Raft.Engine.Snapshots;
+using Coracle.Raft.Engine.Configuration.Alterations;
 
 namespace Coracle.Raft.Engine.Actions.Core
 {
-    /// <remarks>
-    ///  Raft maintains the following properties, which together constitute the Log Matching Property - 
-    ///  • If two entries in different logs have the same index and term, then they store the same command.
-    ///  • If two entries in different logs have the same index and term, then the logs are identical in all preceding entries.
-    /// <seealso cref="Section 5.3 Log Replication"/>
-    /// </remarks>
-    /// 
-    /// <summary>
-    /// If we receive this, then surely there exists an External Leader Server. 
-    /// </summary>
     internal sealed class OnExternalInstallSnapshotChunkRPCReceive : BaseAction<OnExternalRPCReceiveContext<InstallSnapshotRPC>, InstallSnapshotRPCResponse>
     {
         #region Constants
@@ -35,13 +27,12 @@ namespace Coracle.Raft.Engine.Actions.Core
         public const string inputRequest = nameof(inputRequest);
         public const string parsedConfiguration = nameof(parsedConfiguration);
         public const string responding = nameof(responding);
-        public const string DeniedDueToConflict = nameof(DeniedDueToConflict);
 
         #endregion
 
         public override TimeSpan TimeOut => TimeSpan.FromMilliseconds(Input.EngineConfiguration.InstallSnapshotChunkTimeoutOnReceive_InMilliseconds);
 
-        public OnExternalInstallSnapshotChunkRPCReceive(InstallSnapshotRPC input, IChangingState state, OnExternalRPCReceiveContextDependencies actionDependencies, IActivityLogger activityLogger = null) : base(new OnExternalRPCReceiveContext<InstallSnapshotRPC>(state, actionDependencies)
+        public OnExternalInstallSnapshotChunkRPCReceive(InstallSnapshotRPC input, IStateDevelopment state, OnExternalRPCReceiveContextDependencies actionDependencies, IActivityLogger activityLogger = null) : base(new OnExternalRPCReceiveContext<InstallSnapshotRPC>(state, actionDependencies)
         {
             Request = input,
         }, activityLogger)
@@ -49,7 +40,6 @@ namespace Coracle.Raft.Engine.Actions.Core
 
         public override string UniqueName => ActionName;
 
-        // If Should Proceed is false, due to any reason
         protected override InstallSnapshotRPCResponse DefaultOutput()
         {
             return new InstallSnapshotRPCResponse
@@ -63,17 +53,6 @@ namespace Coracle.Raft.Engine.Actions.Core
             return Task.FromResult(Input.IsContextValid);
         }
 
-        /// <remarks>
-        /// -Reply false if term < currentTerm (§5.1)
-        /// -Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm (§5.3)
-        /// -If an existing entry conflicts with a new one(same index but different terms), delete the existing entry and all that
-        /// follow it (§5.3)
-        /// -Append any new entries not already in the log. 
-        /// -If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
-        /// <seealso cref="Figure 2 Append Entries RPC"/>
-        /// </remarks>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
         protected override async Task<InstallSnapshotRPCResponse> Action(CancellationToken cancellationToken)
         {
             /// <remarks>
@@ -110,19 +89,6 @@ namespace Coracle.Raft.Engine.Actions.Core
             }
 
             InstallSnapshotRPCResponse response;
-
-
-            /// <remarks>
-            /// When sending an AppendEntries RPC, the leader includes the index and term of the entry in its log that immediately precedes
-            /// the new entries. If the follower does not find an entry in its log with the same index and term, then it refuses the new entries.
-            /// 
-            /// The consistency check acts as an induction step: the initial empty state of the logs satisfies the Log Matching Property, 
-            /// and the consistency check preserves the Log Matching Property whenever logs are extended.
-            /// 
-            /// As a result, whenever AppendEntries returns successfully, the leader knows that the follower’s log is identical to its
-            /// own log up through the new entries.
-            /// <seealso cref="Section 5.3 Log Replication"/>
-            /// </remarks>
 
             if (Input.Request.Term < currentTerm)
             {
@@ -186,9 +152,9 @@ namespace Coracle.Raft.Engine.Actions.Core
                 Input.Request.SnapshotId, 
                 Input.Request.LastIncludedIndex, 
                 Input.Request.LastIncludedTerm, 
-                fillAtOffset: Input.Request.Offset, receivedData: Input.Request.Data as ISnapshotChunkData);
+                fillAtOffset: Input.Request.Offset, receivedData: Input.Request.Data as ISnapshotDataChunk);
 
-            // Acknowledge Leader On Success
+            /// Acknowledge Leader On Success
             Input.LeaderNodePronouncer.SetNewLeader(Input.Request.LeaderId);
 
             response = new InstallSnapshotRPCResponse
@@ -221,7 +187,7 @@ namespace Coracle.Raft.Engine.Actions.Core
 
                     IEnumerable<NodeConfiguration> clusterConfiguration = await Input.PersistentState.GetConfigurationFromSnapshot(detail);
 
-                    Input.ClusterConfigurationChanger.ApplyConfiguration(new ClusterMembershipChange
+                    Input.ClusterConfigurationChanger.ChangeMembership(new MembershipUpdateEvent
                     {
                         Configuration = clusterConfiguration,
                     }, 
@@ -271,8 +237,8 @@ namespace Coracle.Raft.Engine.Actions.Core
             return response;
         }
 
-        // This is done so that NewResponsibilities can be configured AFTER we respond to this request.
-        // This is done to avoid the chances of current Task cancellation.
+        /// This is done so that NewResponsibilities can be configured AFTER we respond to this request.
+        /// This is done to avoid the chances of current Task cancellation.
         protected override Task OnActionEnd()
         {
             if (Input.TurnToFollower)

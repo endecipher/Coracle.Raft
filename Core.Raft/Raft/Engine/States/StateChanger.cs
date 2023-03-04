@@ -1,7 +1,4 @@
 ﻿using ActivityLogger.Logging;
-using Coracle.Raft.Engine.Actions.Awaiters;
-using Coracle.Raft.Engine.ClientHandling;
-using Coracle.Raft.Engine.Configuration;
 using Coracle.Raft.Engine.Configuration.Cluster;
 using Coracle.Raft.Engine.Helper;
 using Coracle.Raft.Engine.Node;
@@ -10,56 +7,59 @@ using Coracle.Raft.Engine.ActivityLogger;
 using TaskGuidance.BackgroundProcessing.Core;
 using System;
 using Coracle.Raft.Engine.States.LeaderEntities;
+using Coracle.Raft.Engine.Actions;
+using Coracle.Raft.Engine.Configuration.Alterations;
+using Coracle.Raft.Engine.Command;
+using Coracle.Raft.Engine.Exceptions;
 
 namespace Coracle.Raft.Engine.States
 {
     internal class StateChanger : IStateChanger
     {
         #region Constants
-        private const string OldStateValue = nameof(OldStateValue);
-        private const string NewStateValue = nameof(NewStateValue);
-        private const string StateChangerEntity = nameof(StateChanger);
-        private const string FailedToChangeStateDueToInvalidRoute = nameof(FailedToChangeStateDueToInvalidRoute);
+        public const string oldStateValue = nameof(oldStateValue);
+        public const string newStateValue = nameof(newStateValue);
+        public const string StateChangerEntity = nameof(StateChanger);
+        public const string FailedToChangeStateDueToInvalidRoute = nameof(FailedToChangeStateDueToInvalidRoute);
 
         #endregion
 
         #region Dependencies
 
         IActivityLogger ActivityLogger { get; }
-        IPersistentProperties PersistentState { get; }
+        IPersistentStateHandler PersistentState { get; }
         IGlobalAwaiter GlobalAwaiter { get; }
-        IClientRequestHandler ClientRequestHandler { get; }
+        IStateMachineHandler ClientRequestHandler { get; }
         IElectionTimer ElectionTimer { get; }
         IResponsibilities Responsibilities { get; }
         IClusterConfiguration ClusterConfiguration { get; }
         ILeaderNodePronouncer LeaderNodePronouncer { get; }
         IEngineConfiguration EngineConfiguration { get; }
         IHeartbeatTimer HeartbeatTimer { get; }
-        IRemoteManager RemoteManager { get; }
+        IOutboundRequestHandler RemoteManager { get; }
         ICurrentStateAccessor CurrentStateAccessor { get; }
         IAppendEntriesManager AppendEntriesManager { get; }
-        IClusterConfigurationChanger ClusterConfigurationChanger { get; }
+        IMembershipChanger ClusterConfigurationChanger { get; }
         IElectionManager ElectionManager { get; }
         ILeaderVolatileProperties LeaderVolatileProperties { get; }
 
         #endregion
 
-        //TODO: From DI
         public StateChanger(
             IActivityLogger activityLogger,
-            IPersistentProperties persistentState,
+            IPersistentStateHandler persistentState,
             IGlobalAwaiter globalAwaiter,
-            IClientRequestHandler clientRequestHandler,
+            IStateMachineHandler clientRequestHandler,
             IElectionTimer electionTimer,
             IResponsibilities responsibilities,
             IClusterConfiguration clusterConfiguration,
             ILeaderNodePronouncer leaderNodePronouncer,
             IEngineConfiguration engineConfiguration,
             IHeartbeatTimer heartbeatTimer,
-            IRemoteManager remoteManager,
+            IOutboundRequestHandler remoteManager,
             ICurrentStateAccessor currentStateAccessor,
             IAppendEntriesManager appendEntriesManager,
-            IClusterConfigurationChanger clusterConfigurationChanger,
+            IMembershipChanger clusterConfigurationChanger,
             IElectionManager electionManager,
             ILeaderVolatileProperties leaderVolatileProperties
             )
@@ -87,7 +87,7 @@ namespace Coracle.Raft.Engine.States
         /// <summary>
         /// This encompasses creation and initialization of a new <see cref="Follower"/> state.
         /// 
-        /// <see cref="ICanoeNode"/>'s state is changed to the new <see cref="Follower"/> state.
+        /// <see cref="ICoracleNode"/>'s state is changed to the new <see cref="Follower"/> state.
         /// </summary>
         public void Initialize()
         {
@@ -112,12 +112,12 @@ namespace Coracle.Raft.Engine.States
             }
         }
 
-        public void AbandonStateAndConvertTo<T>(string typename) where T : IChangingState, new()
+        public void AbandonStateAndConvertTo<T>(string typename) where T : IStateDevelopment, new()
         {
             lock (_lock)
             {
                 bool canContinue = false;
-                Action<IChangingState> fillDependencies;
+                Action<IStateDevelopment> fillDependencies;
                 var oldStateValue = CurrentStateAccessor.Get().StateValue;
 
                 switch (typename)
@@ -135,12 +135,11 @@ namespace Coracle.Raft.Engine.States
                         fillDependencies = FillFollowerDependencies;
                         break;
                     default:
-                        throw new ArgumentOutOfRangeException($"Invalid new state value {typename}");
+                        throw InvalidStateConversionException.New(typename);
                 }
 
                 if (!canContinue)
                 {
-                    //TODO: I think we can log Exception and not do anything
                     ActivityLogger?.Log(new CoracleActivity
                     {
                         Description = $"State change from {oldStateValue} to {typename} failed",
@@ -149,8 +148,8 @@ namespace Coracle.Raft.Engine.States
                         Level = ActivityLogLevel.Debug,
 
                     }
-                    .With(ActivityParam.New(OldStateValue, oldStateValue.ToString()))
-                    .With(ActivityParam.New(NewStateValue, typename))
+                    .With(ActivityParam.New(StateChanger.oldStateValue, oldStateValue.ToString()))
+                    .With(ActivityParam.New(newStateValue, typename))
                     .WithCallerInfo());
 
                     return;
@@ -158,9 +157,6 @@ namespace Coracle.Raft.Engine.States
 
 
                 var newState = new T();
-
-                //Commented call to this, since ConfigureNew will be called internally at Abstract State level.
-                //ComponentContainer.Instance.GetInstance<IResponsibilities>().ConfigureNew();
 
                 var oldState = CurrentStateAccessor.Get();
 
@@ -176,7 +172,7 @@ namespace Coracle.Raft.Engine.States
             }
         }
 
-        private void FillLeaderDependencies(IChangingState newState)
+        private void FillLeaderDependencies(IStateDevelopment newState)
         {
             newState.StateChanger = this;
 
@@ -189,7 +185,7 @@ namespace Coracle.Raft.Engine.States
             state.HeartbeatTimer = HeartbeatTimer;
         }
 
-        private void FillCandidateDependencies(IChangingState newState)
+        private void FillCandidateDependencies(IStateDevelopment newState)
         {
             newState.StateChanger = this;
 
@@ -201,7 +197,7 @@ namespace Coracle.Raft.Engine.States
             state.RemoteManager = RemoteManager;
         }
 
-        private void FillFollowerDependencies(IChangingState newState)
+        private void FillFollowerDependencies(IStateDevelopment newState)
         {
             newState.StateChanger = this;
 

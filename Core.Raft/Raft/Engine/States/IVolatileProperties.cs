@@ -1,6 +1,6 @@
 ﻿using ActivityLogger.Logging;
-using Coracle.Raft.Engine.Actions.Core;
 using Coracle.Raft.Engine.ActivityLogger;
+using Coracle.Raft.Engine.Snapshots;
 
 namespace Coracle.Raft.Engine.States
 {

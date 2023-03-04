@@ -1,91 +1,73 @@
 ﻿using ActivityLogger.Logging;
-using Coracle.Samples.ClientHandling.Notes;
-using Coracle.IntegrationTests.Components.Remoting;
-using Coracle.Raft.Engine.Actions.Awaiters;
-using Coracle.Raft.Engine.Actions.Core;
-using Coracle.Raft.Engine.ClientHandling;
-using Coracle.Raft.Engine.ClientHandling.Command;
-using Coracle.Raft.Engine.Configuration;
 using Coracle.Raft.Engine.Configuration.Cluster;
-using Coracle.Raft.Engine.Discovery;
-using Coracle.Raft.Engine.Discovery.Registrar;
-using Coracle.Raft.Engine.Helper;
 using Coracle.Raft.Engine.Node;
-using Coracle.Raft.Engine.Operational;
-using Coracle.Raft.Engine.Remoting;
 using Coracle.Raft.Engine.Remoting.RPC;
 using Coracle.Raft.Engine.States;
 using Coracle.Raft.Engine.States.LeaderEntities;
-using EntityMonitoring.FluentAssertions.Extensions;
 using EntityMonitoring.FluentAssertions.Structure;
-using FluentAssertions;
-using TaskGuidance.BackgroundProcessing.Core;
-using Xunit;
-using Coracle.Samples.ClientHandling.NoteCommand;
 using Newtonsoft.Json;
 using Coracle.Raft.Engine.Logs;
+using Coracle.Samples.ClientHandling;
+using Coracle.Samples.Registrar;
+using Coracle.IntegrationTests.Framework;
 
-namespace Coracle.IntegrationTests.Framework
+namespace Coracle.IntegrationTests.Tests
 {
-    public abstract class BaseTest 
+    public abstract class BaseTest
     {
         public const string SUT = nameof(SUT);
+        public const string SampleUri = "https://localhost";
         public const string MockNodeA = nameof(MockNodeA);
         public const string MockNodeB = nameof(MockNodeB);
         public const string MockNewNodeC = nameof(MockNewNodeC);
         public const int Seconds = 1000;
         public const int MilliSeconds = 1;
-        public const int DecidedEventProcessorQueueSize = 49;
-        public const int DecidedEventProcessorWait = 100 * MilliSeconds;
+        public const int ConfiguredEventProcessorQueueSize = 100;
+        public const int ConfiguredEventProcessorWait = 1 * MilliSeconds;
         public TimeSpan EventNotificationTimeOut = TimeSpan.FromSeconds(200);
 
         public EngineConfigurationSettings TestEngineSettings => new EngineConfigurationSettings
         {
             NodeId = SUT,
-            ThisNodeUri = null,
-            DiscoveryServerUri = null,
+            NodeUri = new Uri(SampleUri),
+
             IncludeOriginalClientCommandInResults = true,
-            WaitPostEnroll_InMilliseconds = 0,
-            ProcessorQueueSize = DecidedEventProcessorQueueSize,
-            ProcessorWaitTimeWhenQueueEmpty_InMilliseconds = DecidedEventProcessorWait,
-
-            NoLeaderElectedWaitInterval_InMilliseconds = 10000 * MilliSeconds,
-#if DEBUG
-            ClientCommandTimeout_InMilliseconds = 1 * Seconds,
-#else
-            ClientCommandTimeout_InMilliseconds = 500 * MilliSeconds,
-#endif
-            HeartbeatInterval_InMilliseconds = 5 * Seconds,
-
-            MinElectionTimeout_InMilliseconds = 5 * Seconds,
-            MaxElectionTimeout_InMilliseconds = 6 * Seconds,
-
-            //AppendEntries
-            AppendEntriesTimeoutOnSend_InMilliseconds = 1000 * Seconds,
-            AppendEntriesTimeoutOnReceive_InMilliseconds = 1000 * Seconds,
-
-            //RequestVote
-            RequestVoteTimeoutOnSend_InMilliseconds = 1000 * Seconds,
-            RequestVoteTimeoutOnReceive_InMilliseconds = 1000 * Seconds,
-
             IncludeConfigurationChangeRequestInResults = true,
             IncludeJointConsensusConfigurationInResults = true,
             IncludeOriginalConfigurationInResults = true,
 
-            CatchUpOfNewNodesTimeout_InMilliseconds = 100 * Seconds,
-            CatchUpOfNewNodesWaitInterval_InMilliseconds = 10 * Seconds,
+            WaitPostEnroll_InMilliseconds = 1 * MilliSeconds,
+            HeartbeatInterval_InMilliseconds = 2 * MilliSeconds,
+            NoLeaderElectedWaitInterval_InMilliseconds = 2 * MilliSeconds,
+            CheckDepositionWaitInterval_InMilliseconds = 2 * MilliSeconds,
+            EntryCommitWaitInterval_InMilliseconds = 2 * MilliSeconds,
+            CatchUpOfNewNodesWaitInterval_InMilliseconds = 2 * MilliSeconds,
 
-            CheckDepositionWaitInterval_InMilliseconds = 2 * Seconds,
+            ProcessorQueueSize = ConfiguredEventProcessorQueueSize,
+            ProcessorWaitTimeWhenQueueEmpty_InMilliseconds = ConfiguredEventProcessorWait,
 
-            EntryCommitWaitInterval_InMilliseconds = 100 * MilliSeconds,
-            EntryCommitWaitTimeout_InMilliseconds = 1000 * Seconds,
+            ClientCommandTimeout_InMilliseconds = 100 * MilliSeconds,
 
-            ConfigurationChangeHandleTimeout_InMilliseconds = 1000 * Seconds,
-            CompactionWaitPeriod_InMilliseconds = 2000 * Seconds,
-            InstallSnapshotChunkTimeoutOnReceive_InMilliseconds = 1000 *Seconds,
-            InstallSnapshotChunkTimeoutOnSend_InMilliseconds = 1000 *Seconds,
-            CompactionAttemptInterval_InMilliseconds = 2 * Seconds,
-            CompactionAttemptTimeout_InMilliseconds = 1000 * Seconds,
+            MinElectionTimeout_InMilliseconds = 100 * MilliSeconds,
+            MaxElectionTimeout_InMilliseconds = 150 * MilliSeconds,
+            EntryCommitWaitTimeout_InMilliseconds = 100 * MilliSeconds,
+
+            AppendEntriesTimeoutOnSend_InMilliseconds = 10 * Seconds,
+            AppendEntriesTimeoutOnReceive_InMilliseconds = 10 * Seconds,
+
+            RequestVoteTimeoutOnSend_InMilliseconds = 10 * Seconds,
+            RequestVoteTimeoutOnReceive_InMilliseconds = 10 * Seconds,
+
+            CatchUpOfNewNodesTimeout_InMilliseconds = 10 * Seconds,
+            ConfigurationChangeHandleTimeout_InMilliseconds = 30 * Seconds,
+
+            CompactionWaitPeriod_InMilliseconds = 1 * Seconds,
+            InstallSnapshotChunkTimeoutOnReceive_InMilliseconds = 10 * Seconds,
+            InstallSnapshotChunkTimeoutOnSend_InMilliseconds = 10 * Seconds,
+
+            CompactionAttemptInterval_InMilliseconds = 100 * MilliSeconds,
+            CompactionAttemptTimeout_InMilliseconds = 10 * Seconds,
+
             SnapshotThresholdSize = 5,
             SnapshotBufferSizeFromLastEntry = 1
         };
@@ -104,12 +86,12 @@ namespace Coracle.IntegrationTests.Framework
 
         protected void InitializeNode()
         {
-            Context.GetService<ICanoeNode>().InitializeConfiguration();
+            Context.GetService<ICoracleNode>().InitializeConfiguration();
         }
 
         protected void StartNode()
         {
-            Context.GetService<ICanoeNode>().Start();
+            Context.GetService<ICoracleNode>().Start();
         }
 
         protected void CreateMockNode(string mockNodeId)
@@ -131,7 +113,7 @@ namespace Coracle.IntegrationTests.Framework
             return $"{nameof(Note)}{autoGeneratedId}";
         }
 
-        protected (NoteCommand TestCommand, Note TestNote) TestAddCommand() 
+        protected (NoteCommand TestCommand, Note TestNote) TestAddCommand()
         {
             var nextCommandId = Context.CommandContext.NextCommandCounter;
 
@@ -216,11 +198,11 @@ namespace Coracle.IntegrationTests.Framework
         {
             var list = new List<LogEntry>();
 
-            var lastIndex = await Context.GetService<IPersistentProperties>().GetLastIndex();
+            var lastIndex = await Context.GetService<IPersistentStateHandler>().GetLastIndex();
 
             for (long i = 0; i <= lastIndex; i++)
             {
-                var entry = await Context.GetService<IPersistentProperties>().TryGetValueAtIndex(i);
+                var entry = await Context.GetService<IPersistentStateHandler>().TryGetValueAtIndex(i);
 
                 if (entry != null)
                     list.Add(entry);
@@ -247,7 +229,7 @@ namespace Coracle.IntegrationTests.Framework
         public IDictionary<string, long> MatchIndexes { get; set; } = new Dictionary<string, long>();
         public IDictionary<string, long> NextIndexes { get; set; } = new Dictionary<string, long>();
 
-        internal StateCapture(IChangingState state)
+        internal StateCapture(IStateDevelopment state)
         {
             StateValue = state.StateValue;
 

@@ -7,9 +7,14 @@ namespace Coracle.Raft.Engine.Exceptions
     /// </summary>
     public class AbandonedStateCannotBeControlledException : InvalidOperationException
     {
+        public AbandonedStateCannotBeControlledException(string message) : base($"An abandoned state cannot undergo normal operations. {message}")
+        {
+                
+        }
+
         public static AbandonedStateCannotBeControlledException New()
         {
-            return new AbandonedStateCannotBeControlledException();
+            return new AbandonedStateCannotBeControlledException(string.Empty);
         }
     }
 }

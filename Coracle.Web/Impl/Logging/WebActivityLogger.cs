@@ -3,20 +3,13 @@ using Coracle.Web.Hubs;
 using ActivityLogger.Logging;
 using CorrelationId.Abstractions;
 using Newtonsoft.Json;
-using Microsoft.Extensions.Options;
 using Coracle.Raft.Engine.States.LeaderEntities;
 using Coracle.Raft.Engine.States;
-using Coracle.Raft.Engine.Configuration;
-using Coracle.Samples.PersistentData;
+using Coracle.Raft.Engine.Configuration.Cluster;
+using Coracle.Samples.Data;
 
 namespace Coracle.Web.Impl.Logging
 {
-    public class ActivityLoggerOptions
-    {
-        public bool ConfigureHandler { get; set; } = false;
-        public Action<ActivityLogger.Logging.Activity> HandlerAction { get; set; }
-    }
-
     public class CoracleProperty
     {
         public enum Property 
@@ -37,21 +30,17 @@ namespace Coracle.Web.Impl.Logging
         public string Value { get; set; }
     }
 
-    
-
     public class WebActivityLogger : IActivityLogger
     {
-        public WebActivityLogger(ICorrelationContextAccessor correlationContext, IHubContext<LogHub> logHubContext, IHubContext<RaftHub> raftHubContext, IOptions<ActivityLoggerOptions> options)
+        public WebActivityLogger(ICorrelationContextAccessor correlationContext, IHubContext<LogHub> logHubContext, IHubContext<RaftHub> raftHubContext)
         {
             CorrelationContextAccessor = correlationContext;
             LogHubContext = logHubContext;
             RaftHubContext = raftHubContext;
-            LoggerOptions = options;
         }
 
         public IHubContext<LogHub> LogHubContext { get; }
         public IHubContext<RaftHub> RaftHubContext { get; }
-        public IOptions<ActivityLoggerOptions> LoggerOptions { get; }
         public ActivityLogLevel Level { get; set; } = ActivityLogLevel.Debug;
         public ICorrelationContextAccessor CorrelationContextAccessor { get; }
 
@@ -89,28 +78,28 @@ namespace Coracle.Web.Impl.Logging
 
             switch (e.EntitySubject)
             {
-                case TestStateProperties.Entity:
+                case SampleVolatileStateHandler.Entity:
                     {
                         list.Add(new CoracleProperty
                         {
                             Prop = CoracleProperty.Property.Term,
-                            Value = e.Parameters.First(_ => _.Name.Equals(TestStateProperties.CurrentTermValue)).Value
+                            Value = e.Parameters.First(_ => _.Name.Equals(SampleVolatileStateHandler.CurrentTermValue)).Value
                         });
 
                         list.Add(new CoracleProperty
                         {
                             Prop = CoracleProperty.Property.VotedFor,
-                            Value = e.Parameters.First(_ => _.Name.Equals(TestStateProperties.VotedForValue)).Value
+                            Value = e.Parameters.First(_ => _.Name.Equals(SampleVolatileStateHandler.VotedForValue)).Value
                         });
                     }
                     break;
 
-                case TestStateProperties.EntityLog:
+                case SampleVolatileStateHandler.EntityLog:
                     {
                         list.Add(new CoracleProperty
                         {
                             Prop = CoracleProperty.Property.LogChain,
-                            Value = e.Parameters.First(_ => _.Name.Equals(TestStateProperties.logChain)).Value
+                            Value = e.Parameters.First(_ => _.Name.Equals(SampleVolatileStateHandler.logChain)).Value
                         });
                     }
                     break;

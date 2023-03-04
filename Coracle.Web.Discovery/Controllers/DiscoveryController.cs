@@ -1,6 +1,6 @@
 ﻿using Coracle.Raft.Engine.Configuration.Cluster;
 using Coracle.Raft.Engine.Discovery;
-using Coracle.Raft.Engine.Discovery.Registrar;
+using Coracle.Samples.Registrar;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Coracle.Web.Discovery.Controllers
@@ -15,7 +15,7 @@ namespace Coracle.Web.Discovery.Controllers
         public INodeRegistrar NodeRegistrar { get; }
 
         [HttpPost(Name = nameof(Enroll))]
-        public async Task<IDiscoveryOperation> Enroll()
+        public async Task<DiscoveryResult> Enroll()
         {
             var obj = await HttpContext.Request.ReadFromJsonAsync<NodeConfiguration>(HttpContext.RequestAborted);
 
@@ -23,19 +23,19 @@ namespace Coracle.Web.Discovery.Controllers
         }
 
         [HttpGet(Name = nameof(Get))]
-        public async Task<IDiscoveryOperation> Get()
+        public async Task<DiscoveryResult> Get()
         {
             return await NodeRegistrar.GetAllNodes(HttpContext.RequestAborted);
         }
 
         [HttpGet(Name = nameof(Clear))]
-        public async Task<IDiscoveryOperation> Clear()
+        public async Task<DiscoveryResult> Clear()
         {
             await NodeRegistrar.Clear();
             
-            return new DiscoveryOperation
+            return new DiscoveryResult
             {
-                IsOperationSuccessful = true,
+                IsSuccessful = true,
             };
         }
     }

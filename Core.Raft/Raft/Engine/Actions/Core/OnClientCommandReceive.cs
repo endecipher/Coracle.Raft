@@ -1,7 +1,5 @@
 ﻿using ActivityLogger.Logging;
 using Coracle.Raft.Engine.Actions.Contexts;
-using Coracle.Raft.Engine.ClientHandling.Command;
-using Coracle.Raft.Engine.Configuration.Cluster;
 using Coracle.Raft.Engine.Exceptions;
 using Coracle.Raft.Engine.States;
 using Coracle.Raft.Engine.ActivityLogger;
@@ -9,56 +7,48 @@ using TaskGuidance.BackgroundProcessing.Actions;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Coracle.Raft.Engine.Node;
+using Coracle.Raft.Engine.Command;
 
 namespace Coracle.Raft.Engine.Actions.Core
 {
-    /// <summary>
-    /// This is invoked from the node to handle a Client Command
-    /// </summary>
-    internal sealed class OnClientCommandReceive<TCommand> : BaseAction<OnClientCommandReceiveContext<TCommand>, ClientHandlingResult> where TCommand : class, ICommand //where TCommandResult : ClientHandlingResult, new() 
+    internal sealed class OnClientCommandReceive<TCommand> : BaseAction<OnClientCommandReceiveContext<TCommand>, CommandExecutionResult> where TCommand : class, ICommand 
     {
         #region Constants
 
         public const string ActionName = nameof(OnClientCommandReceive<TCommand>);
-        public const string CommandId = nameof(CommandId);
-        public const string CurrentState = nameof(CurrentState);
+        public const string commandId = nameof(commandId);
+        public const string currentState = nameof(currentState);
         public const string RetryingAsLeaderNodeNotFound = nameof(RetryingAsLeaderNodeNotFound);
         public const string ForwardingCommandToLeader = nameof(ForwardingCommandToLeader);
         public const string AppendingNewEntryForNonReadOnlyCommand = nameof(AppendingNewEntryForNonReadOnlyCommand);
         public const string NotifyOtherNodes = nameof(NotifyOtherNodes);
         public const string CommandApplied = nameof(CommandApplied);
-        public const string NodeId = nameof(NodeId);
-        public const string NodeActionName = nameof(NodeActionName);
 
         #endregion
 
-        /// <summary>
-        /// The TimeConfiguration maybe changed dynamically on observation of the system
-        /// </summary>
         private IEngineConfiguration Configuration => Input.EngineConfiguration;
         private bool IncludeCommand => Input.EngineConfiguration.IncludeOriginalClientCommandInResults;
-
         public override string UniqueName => ActionName;
+        public override TimeSpan TimeOut => TimeSpan.FromMilliseconds(Configuration.ClientCommandTimeout_InMilliseconds);
 
-        public OnClientCommandReceive(TCommand command, IChangingState state, OnClientCommandReceiveContextDependencies actionDependencies, IActivityLogger activityLogger = null) : base(new OnClientCommandReceiveContext<TCommand>(state, actionDependencies)
+        public OnClientCommandReceive(TCommand command, IStateDevelopment state, OnClientCommandReceiveContextDependencies actionDependencies, IActivityLogger activityLogger = null) : base(new OnClientCommandReceiveContext<TCommand>(state, actionDependencies)
         {
             Command = command,
-            InvocationTime = DateTimeOffset.UtcNow,
             UniqueCommandId = command.UniqueId
         }, activityLogger)
         { }
 
-        public override TimeSpan TimeOut => TimeSpan.FromMilliseconds(Configuration.ClientCommandTimeout_InMilliseconds);
 
         #region Workflow
 
-        protected override ClientHandlingResult DefaultOutput()
+        protected override CommandExecutionResult DefaultOutput()
         {
-            return new ClientHandlingResult
+            return new CommandExecutionResult
             {
-                IsOperationSuccessful = false,
+                IsSuccessful = false,
                 LeaderNodeConfiguration = null,
-                Exception = LeaderNotFoundException.New(),
+                Exception = ClientCommandDeniedException.New(),
                 OriginalCommand = IncludeCommand ? Input.Command : null,
             };
         }
@@ -68,7 +58,7 @@ namespace Coracle.Raft.Engine.Actions.Core
             return Task.FromResult(Input.IsContextValid);
         }
 
-        protected override async Task<ClientHandlingResult> Action(CancellationToken cancellationToken)
+        protected override async Task<CommandExecutionResult> Action(CancellationToken cancellationToken)
         {
             /// <remarks>
             /// Clients of Raft send all of their requests to the leader.
@@ -91,13 +81,13 @@ namespace Coracle.Raft.Engine.Actions.Core
                     Level = ActivityLogLevel.Debug,
 
                 }
-                .With(ActivityParam.New(CommandId, Input.UniqueCommandId))
+                .With(ActivityParam.New(commandId, Input.UniqueCommandId))
                 .WithCallerInfo());
 
                 await Task.Delay(Configuration.NoLeaderElectedWaitInterval_InMilliseconds, CancellationManager.CoreToken);
             }
 
-            ClientHandlingResult result;
+            CommandExecutionResult result;
 
             /// <remarks>
             /// The leader handles all client requests (if a client contacts a follower, the follower redirects it to the leader).
@@ -112,13 +102,13 @@ namespace Coracle.Raft.Engine.Actions.Core
                     Level = ActivityLogLevel.Debug,
 
                 }
-                .With(ActivityParam.New(CommandId, Input.UniqueCommandId))
-                .With(ActivityParam.New(CurrentState, Input.State.StateValue.ToString()))
+                .With(ActivityParam.New(commandId, Input.UniqueCommandId))
+                .With(ActivityParam.New(currentState, Input.State.StateValue.ToString()))
                 .WithCallerInfo());
 
-                result = new ClientHandlingResult
+                result = new CommandExecutionResult
                 {
-                    IsOperationSuccessful = false,
+                    IsSuccessful = false,
                     LeaderNodeConfiguration = Input.LeaderNodePronouncer.RecognizedLeaderConfiguration,
                     Exception = ClientCommandDeniedException.New(),
                     OriginalCommand = IncludeCommand ? Input.Command : null,
@@ -137,9 +127,12 @@ namespace Coracle.Raft.Engine.Actions.Core
             /// 
             /// <seealso cref="Section 8 Client Interaction"/>
             /// </remarks>
-            if (await Input.ClientRequestHandler.IsCommandLatest(Input.Command.UniqueId, out var executedCommandResult))
+            /// 
+            var (IsExecutedAndLatest, CommandResult) = await Input.ClientRequestHandler.IsExecutedAndLatest(Input.Command.UniqueId);
+
+            if (IsExecutedAndLatest)
             {
-                return executedCommandResult;
+                return CommandResult;
             }
 
             /// <remarks>
@@ -155,14 +148,14 @@ namespace Coracle.Raft.Engine.Actions.Core
 
                 if (Input.State.StateValue.IsLeader())
                 {
-                    await Input.ClientRequestHandler.TryGetCommandResult(Input.Command, out var clientHandlingResult);
-                    return clientHandlingResult;
+                    var (IsExecuted, Result) = await Input.ClientRequestHandler.TryGetResult(Input.Command);
+                    return Result;
                 }
                 else
                 {
-                    result = new ClientHandlingResult
+                    result = new CommandExecutionResult
                     {
-                        IsOperationSuccessful = false,
+                        IsSuccessful = false,
                         LeaderNodeConfiguration = Input.LeaderNodePronouncer.RecognizedLeaderConfiguration,
                         Exception = ClientCommandDeniedException.New(),
                         OriginalCommand = IncludeCommand ? Input.Command : null,
@@ -186,8 +179,8 @@ namespace Coracle.Raft.Engine.Actions.Core
                     Level = ActivityLogLevel.Debug,
 
                 }
-                .With(ActivityParam.New(CommandId, Input.UniqueCommandId))
-                .With(ActivityParam.New(CurrentState, Input.State.StateValue.ToString()))
+                .With(ActivityParam.New(commandId, Input.UniqueCommandId))
+                .With(ActivityParam.New(currentState, Input.State.StateValue.ToString()))
                 .WithCallerInfo());
 
 
@@ -235,42 +228,27 @@ namespace Coracle.Raft.Engine.Actions.Core
                     Level = ActivityLogLevel.Debug,
 
                 }
-                .With(ActivityParam.New(CommandId, Input.UniqueCommandId))
-                .With(ActivityParam.New(CurrentState, Input.State.StateValue.ToString()))
+                .With(ActivityParam.New(commandId, Input.UniqueCommandId))
+                .With(ActivityParam.New(currentState, Input.State.StateValue.ToString()))
                 .WithCallerInfo());
 
                 Input.AppendEntriesManager.InitiateAppendEntries();
 
-                ClientHandlingResult clientHandlingResult;
-
                 /// <remarks>
-                /// When the entry has been
-                /// safely replicated(as described below), the leader applies
-                /// the entry to its state machine and returns the result of that
-                /// execution to the client.
+                /// When the entry has been safely replicated (as described below), the leader applies
+                /// the entry to its state machine and returns the result of that execution to the client.
                 /// 
-                /// If followers crash or run slowly,
-                /// or if network packets are lost, the leader retries AppendEntries RPCs indefinitely (even after it has responded to
-                /// the client) until all followers eventually store all log entries.
+                /// If followers crash or run slowly, or if network packets are lost, the leader retries AppendEntries RPCs 
+                /// indefinitely (even after it has responded to the client) until all followers eventually store all log entries.
                 /// </remarks>
-                /// 
-                //TODO: Make sure that Global Awaiter is a dependency which makes us wait until a specific log entry index is comitted. This thing is used like everywhere
 
                 Input.GlobalAwaiter.AwaitEntryCommit(logEntry.CurrentIndex, cancellationToken);
 
                 /// <remarks>
                 /// Wait for UpdateCommitIndex to apply some Commands. 
-                /// 
-                /// NOTE:
-                /// This may seem risky, but if somehow some error occurs during those parallel tasks above (Like networking/RPC issues),
-                /// then they will again be retried, as the documentation states.
-                /// 
-                /// If all are kept on retrying, then there is a major issue, since Majority nodes could not be reached, and this task should timeout.
-                /// 
-                /// If something happens in another thread which makes the State change from the current Leader, then ideally this task will be cancelled, as
-                /// this OnClientCommand was initiated with executeSeparately false. (Thus binded with Responsibilities.CoreToken)
                 /// </remarks>
-                await Input.ClientRequestHandler.TryGetCommandResult(Input.Command, out clientHandlingResult);
+
+                var (IsExecuted, Result) = await Input.ClientRequestHandler.TryGetResult(Input.Command);
 
                 ActivityLogger?.Log(new CoracleActivity
                 {
@@ -279,16 +257,16 @@ namespace Coracle.Raft.Engine.Actions.Core
                     Level = ActivityLogLevel.Debug,
 
                 }
-                .With(ActivityParam.New(CommandId, Input.UniqueCommandId))
+                .With(ActivityParam.New(commandId, Input.UniqueCommandId))
                 .WithCallerInfo());
 
-                return clientHandlingResult;
+                return Result;
             }
             else
             {
-                return new ClientHandlingResult
+                return new CommandExecutionResult
                 {
-                    IsOperationSuccessful = false,
+                    IsSuccessful = false,
                     LeaderNodeConfiguration = Input.LeaderNodePronouncer.RecognizedLeaderConfiguration,
                     Exception = ClientCommandDeniedException.New(),
                     OriginalCommand = IncludeCommand ? Input.Command : null,

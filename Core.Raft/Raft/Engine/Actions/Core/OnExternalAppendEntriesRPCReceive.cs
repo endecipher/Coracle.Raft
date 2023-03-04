@@ -4,12 +4,12 @@ using Coracle.Raft.Engine.Logs;
 using Coracle.Raft.Engine.Remoting.RPC;
 using Coracle.Raft.Engine.States;
 using Coracle.Raft.Engine.ActivityLogger;
-using Coracle.Raft.Engine.Configuration.Cluster;
 using TaskGuidance.BackgroundProcessing.Actions;
 using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Coracle.Raft.Engine.Configuration.Alterations;
 
 namespace Coracle.Raft.Engine.Actions.Core
 {
@@ -46,7 +46,7 @@ namespace Coracle.Raft.Engine.Actions.Core
 
         public override TimeSpan TimeOut => TimeSpan.FromMilliseconds(Input.EngineConfiguration.AppendEntriesTimeoutOnReceive_InMilliseconds);
 
-        public OnExternalAppendEntriesRPCReceive(AppendEntriesRPC input, IChangingState state, OnExternalRPCReceiveContextDependencies actionDependencies, IActivityLogger activityLogger = null) : base(new OnExternalRPCReceiveContext<AppendEntriesRPC>(state, actionDependencies)
+        public OnExternalAppendEntriesRPCReceive(AppendEntriesRPC input, IStateDevelopment state, OnExternalRPCReceiveContextDependencies actionDependencies, IActivityLogger activityLogger = null) : base(new OnExternalRPCReceiveContext<AppendEntriesRPC>(state, actionDependencies)
         {
             Request = input,
         }, activityLogger)
@@ -54,7 +54,6 @@ namespace Coracle.Raft.Engine.Actions.Core
 
         public override string UniqueName => ActionName;
 
-        // If Should Proceed is false, due to any reason
         protected override AppendEntriesRPCResponse DefaultOutput()
         {
             return new AppendEntriesRPCResponse
@@ -81,7 +80,6 @@ namespace Coracle.Raft.Engine.Actions.Core
         /// <seealso cref="Figure 2 Append Entries RPC"/>
         /// </remarks>
         /// <param name="cancellationToken"></param>
-        /// <returns></returns>
         protected override async Task<AppendEntriesRPCResponse> Action(CancellationToken cancellationToken)
         {
             /// <remarks>
@@ -175,7 +173,6 @@ namespace Coracle.Raft.Engine.Actions.Core
                 /// then it updates its current term to the larger value.
                 /// <seealso cref="Section 5.1 Second-to-last para"/>
                 /// </remarks>
-                /// 
 
                 ActivityLogger?.Log(new CoracleActivity
                 {
@@ -195,7 +192,7 @@ namespace Coracle.Raft.Engine.Actions.Core
 
             var logEntryAtPreviousIndex = await Input.PersistentState.TryGetValueAtIndex(Input.Request.PreviousLogIndex);
 
-            //If an entry doesn't exist for the previous log index
+            /// If an entry doesn't exist for the previous log index
             if (logEntryAtPreviousIndex == null)
             {
                 var doesPreviousTermExist = await Input.PersistentState.DoesTermExist(Input.Request.PreviousLogTerm);
@@ -255,7 +252,7 @@ namespace Coracle.Raft.Engine.Actions.Core
                 /// will be required for each term with conflicting entries, rather than one RPC per entry
                 /// <see cref="Section 5.3 Log Replication"/>
                 /// </remarks>
-                /// 
+
                 response = new AppendEntriesRPCResponse
                 {
                     Term = currentTerm,
@@ -278,8 +275,8 @@ namespace Coracle.Raft.Engine.Actions.Core
                 return response;
             }
 
-            // If we have reached this part of the code, that means that for the PrevLogIndex sent by the leader, we had an entry with the same term, and thus, 
-            // all entries match up until the prevLogIndex.
+            /// If we have reached this part of the code, that means that for the PrevLogIndex sent by the leader, we had an entry with the same term, and thus, 
+            /// all entries match up until the prevLogIndex.
 
             /// <remarks>
             /// In Raft, the leader handles inconsistencies by forcing the followers’ logs to duplicate its own. 
@@ -300,14 +297,12 @@ namespace Coracle.Raft.Engine.Actions.Core
             /// 3. The followers write that entry in their log and confirm back
             /// 4. The leader then applies/executes that entry, and sends new AppendEntries RPC in the form of heartbeat
             /// 5. The follower nodes, then internally get their CommitIndex updated, which forces that entry's application/execution 
-            /// 
             /// </remarks>
-            /// 
+
             /// <remarks> 
             /// A leader never overwrites or deletes entries in its own log (the Leader Append - Only Property in Figure 3).
             /// <seealso cref="Section 5.3 Log Replication"/>
             /// </remarks>
-            /// 
 
             if (Input.Request.Entries != null && Input.Request.Entries.Any())
             {
@@ -330,7 +325,7 @@ namespace Coracle.Raft.Engine.Actions.Core
 
                 if (isConfigEntryPresent)
                 {
-                    Input.ClusterConfigurationChanger.ApplyConfiguration(new ClusterMembershipChange
+                    Input.ClusterConfigurationChanger.ChangeMembership(new MembershipUpdateEvent
                     {
                         Configuration = await Input.PersistentState.ReadFrom(configurationLogEntry: configurationLogEntry),
                         ConfigurationLogEntryIndex = configurationLogEntry.CurrentIndex
@@ -370,14 +365,14 @@ namespace Coracle.Raft.Engine.Actions.Core
             .With(ActivityParam.New(responding, response))
             .WithCallerInfo());
 
-            // Acknowledge Leader On Success
+            /// Acknowledge Leader On Success
             Input.LeaderNodePronouncer.SetNewLeader(Input.Request.LeaderId);
 
             return response;
         }
 
-        // This is done so that NewResponsibilities can be configured AFTER we respond to this request.
-        // This is done to avoid the chances of current Task cancellation.
+        /// This is done so that NewResponsibilities can be configured AFTER we respond to this request.
+        /// This is done to avoid the chances of current Task cancellation.
         protected override Task OnActionEnd()
         {
             if (Input.TurnToFollower)

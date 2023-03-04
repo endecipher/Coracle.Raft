@@ -1,8 +1,6 @@
-﻿using System;
-
-namespace Coracle.Raft.Engine.Exceptions
+﻿namespace Coracle.Raft.Engine.Exceptions
 {
-    public class ClientCommandDeniedException : Exception
+    public class ClientCommandDeniedException : AbstractDeniedException
     {
         public ClientCommandDeniedException(string message) : base(message)
         {
@@ -11,7 +9,7 @@ namespace Coracle.Raft.Engine.Exceptions
 
         public static ClientCommandDeniedException New()
         {
-            return new ClientCommandDeniedException("This Node is currently in Candidate/Follower state. Please forwarding to leader. ");
+            return new ClientCommandDeniedException(string.Empty);
         }
     }
 }

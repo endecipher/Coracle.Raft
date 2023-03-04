@@ -1,19 +1,19 @@
 ﻿using Coracle.Raft.Engine.Configuration.Cluster;
+using Coracle.Raft.Engine.Node;
 using Coracle.Raft.Engine.Remoting;
 using Coracle.Raft.Engine.States;
-using System;
 
 namespace Coracle.Raft.Engine.Actions.Contexts
 {
     internal sealed class OnSendRequestVoteRPCContextDependencies
     {
         internal IEngineConfiguration EngineConfiguration { get; set; }
-        internal IPersistentProperties PersistentState { get; set; }
-        internal IRemoteManager RemoteManager { get; set; }
+        internal IPersistentStateHandler PersistentState { get; set; }
+        internal IOutboundRequestHandler RemoteManager { get; set; }
         internal ICurrentStateAccessor CurrentStateAccessor { get; set; }
     }
 
-    internal sealed class OnSendRequestVoteRPCContext : IActionContext
+    internal sealed class OnSendRequestVoteRPCContext : IOutboundRpcContext
     {
         public OnSendRequestVoteRPCContext(INodeConfiguration toNode, long currentTerm, OnSendRequestVoteRPCContextDependencies deps)
         {
@@ -22,18 +22,17 @@ namespace Coracle.Raft.Engine.Actions.Contexts
             NodeConfiguration = toNode;
         }
 
-        internal INodeConfiguration NodeConfiguration { get; }
-        internal DateTimeOffset InvocationTime { get; set; }
+        public INodeConfiguration NodeConfiguration { get; set; }
         internal long ElectionTerm { get; }
         public bool IsContextValid => !State.IsDisposed && State.StateValue.IsCandidate();
-        internal IChangingState State => CurrentStateAccessor.Get();
+        internal IStateDevelopment State => CurrentStateAccessor.Get();
         OnSendRequestVoteRPCContextDependencies Dependencies { get; set; }
 
 
         #region Action Dependencies
         internal IEngineConfiguration EngineConfiguration => Dependencies.EngineConfiguration;
-        internal IPersistentProperties PersistentState => Dependencies.PersistentState;
-        internal IRemoteManager RemoteManager => Dependencies.RemoteManager;
+        internal IPersistentStateHandler PersistentState => Dependencies.PersistentState;
+        internal IOutboundRequestHandler RemoteManager => Dependencies.RemoteManager;
         internal ICurrentStateAccessor CurrentStateAccessor => Dependencies.CurrentStateAccessor;
 
         #endregion

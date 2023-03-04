@@ -1,41 +1,37 @@
-﻿using Coracle.Raft.Engine.Actions.Core;
-using Coracle.Raft.Engine.Configuration.Cluster;
+﻿using Coracle.Raft.Engine.Configuration.Cluster;
+using Coracle.Raft.Engine.Node;
 using Coracle.Raft.Engine.Remoting;
-using Coracle.Raft.Engine.Remoting.RPC;
+using Coracle.Raft.Engine.Snapshots;
 using Coracle.Raft.Engine.States;
-using System;
 
 namespace Coracle.Raft.Engine.Actions.Contexts
 {
     internal sealed class OnSendInstallSnapshotChunkRPCContextDependencies
     {
         internal IEngineConfiguration EngineConfiguration { get; set; }
-        internal IPersistentProperties PersistentState { get; set; }
-        internal IRemoteManager RemoteManager { get; set; }
+        internal IPersistentStateHandler PersistentState { get; set; }
+        internal IOutboundRequestHandler RemoteManager { get; set; }
     }
 
-    internal sealed class OnSendInstallSnapshotChunkRPCContext : IAppendEntriesRPCContext
+    internal sealed class OnSendInstallSnapshotChunkRPCContext : IOutboundRpcContext
     {
-        public OnSendInstallSnapshotChunkRPCContext(IChangingState changingState, OnSendInstallSnapshotChunkRPCContextDependencies dependencies)
+        public OnSendInstallSnapshotChunkRPCContext(IStateDevelopment changingState, OnSendInstallSnapshotChunkRPCContextDependencies dependencies)
         {
             State = changingState;
             Dependencies = dependencies;
         }
 
-        public INodeConfiguration NodeConfiguration { get; internal set; }
-        public DateTimeOffset InvocationTime { get; internal set; }
-        public int Offset { get; internal set; }
-        public ISnapshotHeader SnapshotHeader { get; internal set; }
-
-
-        internal IChangingState State { get; set; }
+        public INodeConfiguration NodeConfiguration { get; set; }
+        internal int Offset { get; set; }
+        internal ISnapshotHeader SnapshotHeader { get; set; }
+        internal IStateDevelopment State { get; set; }
         OnSendInstallSnapshotChunkRPCContextDependencies Dependencies { get; set; }
         public bool IsContextValid => !State.IsDisposed && State.StateValue.IsLeader();
 
         #region Action Dependencies
         internal IEngineConfiguration EngineConfiguration => Dependencies.EngineConfiguration;
-        internal IPersistentProperties PersistentState => Dependencies.PersistentState;
-        internal IRemoteManager RemoteManager => Dependencies.RemoteManager;
+        internal IPersistentStateHandler PersistentState => Dependencies.PersistentState;
+        internal IOutboundRequestHandler RemoteManager => Dependencies.RemoteManager;
 
 
         #endregion

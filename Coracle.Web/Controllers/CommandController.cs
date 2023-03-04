@@ -1,15 +1,11 @@
-﻿using Coracle.Samples.ClientHandling.NoteCommand;
-using Coracle.Samples.ClientHandling.Notes;
+﻿using Coracle.Samples.ClientHandling;
+using Coracle.Web.Client;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Coracle.Web.Controllers
 {
     public class CommandController : Controller
     {
-        public const string Command = nameof(Command);
-        public const string AddNoteConstant = nameof(AddNote);
-        public const string GetNoteConstant = nameof(GetNote);
-        public static string ExternalHandlingEndpoint => Command + "/" + nameof(HandleCommand);
 
         public CommandController(ICoracleClient coracleClient)
         {

@@ -1,8 +1,4 @@
 ﻿using ActivityLogger.Logging;
-using Coracle.Raft.Engine.Actions.Awaiters;
-using Coracle.Raft.Engine.ClientHandling;
-using Coracle.Raft.Engine.ClientHandling.Command;
-using Coracle.Raft.Engine.Configuration;
 using Coracle.Raft.Engine.Configuration.Cluster;
 using Coracle.Raft.Engine.Helper;
 using Coracle.Raft.Engine.ActivityLogger;
@@ -10,25 +6,29 @@ using TaskGuidance.BackgroundProcessing.Core;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Coracle.Raft.Engine.Actions.Common;
+using Coracle.Raft.Engine.Configuration.Alterations;
+using Coracle.Raft.Engine.Node;
+using Coracle.Raft.Engine.Actions;
+using Coracle.Raft.Engine.Actions.Core;
+using Coracle.Raft.Engine.Command;
 
 namespace Coracle.Raft.Engine.States
 {
     internal interface IStateDependencies
     {
         IActivityLogger ActivityLogger { get; set; }
-        IPersistentProperties PersistentState { get; set; }
+        IPersistentStateHandler PersistentState { get; set; }
         IGlobalAwaiter GlobalAwaiter { get; set; }
-        IClientRequestHandler ClientRequestHandler { get; set; }
+        IStateMachineHandler ClientRequestHandler { get; set; }
         IElectionTimer ElectionTimer { get; set; }
         IResponsibilities Responsibilities { get; set; }
         IClusterConfiguration ClusterConfiguration { get; set; }
-        IClusterConfigurationChanger ClusterConfigurationChanger { get; set; }
+        IMembershipChanger ClusterConfigurationChanger { get; set; }
         IEngineConfiguration EngineConfiguration { get; set; }
         ILeaderNodePronouncer LeaderNodePronouncer { get; set; }
     }
 
-    internal abstract class AbstractState : IChangingState, IStateDependencies, IHandleConfigurationChange
+    internal abstract class AbstractState : IStateDevelopment, IStateDependencies, IMembershipUpdate
     {
         #region Constants
 
@@ -53,13 +53,13 @@ namespace Coracle.Raft.Engine.States
 
         public IActivityLogger ActivityLogger { get; set; }
         public ILeaderNodePronouncer LeaderNodePronouncer { get; set; }
-        public IPersistentProperties PersistentState { get; set; }
+        public IPersistentStateHandler PersistentState { get; set; }
         public IGlobalAwaiter GlobalAwaiter { get; set; }
-        public IClientRequestHandler ClientRequestHandler { get; set; }
+        public IStateMachineHandler ClientRequestHandler { get; set; }
         public IElectionTimer ElectionTimer { get; set; }
         public IResponsibilities Responsibilities { get; set; }
         public IClusterConfiguration ClusterConfiguration { get; set; }
-        public IClusterConfigurationChanger ClusterConfigurationChanger { get; set; }
+        public IMembershipChanger ClusterConfigurationChanger { get; set; }
         public IEngineConfiguration EngineConfiguration { get; set; }
 
 
@@ -68,9 +68,6 @@ namespace Coracle.Raft.Engine.States
         StateValues PausedStateValue { get; set; }
         public IStateChanger StateChanger { get; set; }
         public bool IsDisposed { get; private set; } = false;
-
-        //todo: better idea would be to pass statechanger and depChart in iniitalizeOnStateChangwe for scope modifier to be protected internal
-        //public IDependencyChart Dependencies { get; set; }
 
         internal AbstractState() { }
 
@@ -94,9 +91,6 @@ namespace Coracle.Raft.Engine.States
         /// 
         /// <see cref="Figure 2 Rules For Servers | All Servers"/>
         /// </summary>
-        /// <param name="indexToAssignAsCommitIndex">New Commit Index to be</param>
-        /// <param name="applySynchronously">Flag to control whether the control flow needs to wait until all log Entries are applied to the state machine</param>
-        /// <exception cref="ArgumentException"></exception>
         internal void UpdateCommitIndex(long indexToAssignAsCommitIndex)
         {
             ActivityLogger?.Log(new CoracleActivity
@@ -130,8 +124,6 @@ namespace Coracle.Raft.Engine.States
 
             lock (commitIndexLock)
             {
-
-
                 /// <remarks>
                 /// Raft never commits log entries from previous terms by counting replicas. Only log entries from the leader’s current
                 /// term are committed by counting replicas; once an entry from the current term has been committed in this way,
@@ -180,7 +172,7 @@ namespace Coracle.Raft.Engine.States
 
                         var commandToApply = PersistentState.ReadFrom<ICommand>(commandLogEntry: entryToApply).GetAwaiter().GetResult();
 
-                        ClientRequestHandler.ExecuteAndApplyLogEntry(commandToApply);
+                        ClientRequestHandler.ExecuteAndApply(commandToApply);
                     }
                     catch (Exception ex)
                     {
@@ -200,9 +192,9 @@ namespace Coracle.Raft.Engine.States
 
                 /// <remarks>
                 /// Finally Commit Index is updated. 
+                /// Just in case an earlier indexToAssign is supplied parallely. Better than assigning directly.
                 /// </remarks>
-                /// 
-                // Just in case an earlier indexToAssign is supplied parallely. Better than assigning directly.
+
                 VolatileState.CommitIndex = Math.Max(indexToAssignAsCommitIndex, VolatileState.CommitIndex);
             }
         }
@@ -211,13 +203,12 @@ namespace Coracle.Raft.Engine.States
 
         #region Configuration Change
 
-        public virtual void HandleConfigurationChange(IEnumerable<INodeConfiguration> newPeerNodeConfigurations)
+        public virtual void UpdateMembership(IEnumerable<INodeConfiguration> newPeerNodeConfigurations)
         {
 
         }
 
         #endregion
-
 
         #region State Change
         public virtual async Task OnStateChangeBeginDisposal()
@@ -242,10 +233,6 @@ namespace Coracle.Raft.Engine.States
         {
             VolatileState = volatileProperties;
 
-            //TODO: State Changer's responsibility is to make sure that new state is available in CanoeNode singleton.
-            //Also LeaderNodeConfiguration should be updated RecognizedLeader when ExternalAppendEntriesRPC is received, or it elects itself as a leader. 
-            //All State operations should get it from GetInstance<ICanoeNodeState>
-
             ActivityLogger?.Log(new CoracleActivity
             {
                 EntitySubject = Entity,
@@ -267,7 +254,8 @@ namespace Coracle.Raft.Engine.States
                 EngineConfiguration = EngineConfiguration,
                 LeaderNodePronouncer = LeaderNodePronouncer,
                 PersistentState = PersistentState,
-                Responsibilities = Responsibilities
+                Responsibilities = Responsibilities,
+                ClusterConfiguration = ClusterConfiguration
 
             }, this, ActivityLogger);
 
@@ -336,8 +324,7 @@ namespace Coracle.Raft.Engine.States
             StateValue = StateValues.Abandoned;
 
             /// Configuring new responsibilities means that EventProcessor is stopped, and supplying invokableActionNames with a random "Abandoned", means that
-            /// no Enqueued actions will be able to execute.
-            /// StateChanger.Initialize may have to be called to get it up and running again.
+            /// no Enqueued actions will be able to execute. 
             Responsibilities.ConfigureNew(invocableActionNames: new HashSet<string>
             {
                 StateValues.Abandoned.ToString()

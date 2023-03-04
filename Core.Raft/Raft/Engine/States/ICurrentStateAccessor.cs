@@ -2,9 +2,9 @@
 {
     internal interface ICurrentStateAccessor
     {
-        IChangingState Get();
+        IStateDevelopment Get();
 
-        void UpdateWith(IChangingState currentState);
+        void UpdateWith(IStateDevelopment currentState);
     }
 
 }

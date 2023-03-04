@@ -1,14 +1,12 @@
 ﻿using ActivityLogger.Logging;
-using Coracle.Raft.Engine.Configuration;
 using Coracle.Raft.Engine.Configuration.Cluster;
 using Coracle.Raft.Engine.ActivityLogger;
-using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Coracle.Raft.Engine.Helper;
-using Coracle.Raft.Engine.Actions.Core;
+using Coracle.Raft.Engine.Snapshots;
 
 namespace Coracle.Raft.Engine.States.LeaderEntities
 {
@@ -52,9 +50,9 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
 
         IActivityLogger ActivityLogger { get; }
         IClusterConfiguration ClusterConfiguration { get; }
-        IPersistentProperties PersistentState { get; set; }
+        IPersistentStateHandler PersistentState { get; set; }
 
-        public LeaderVolatileProperties(IActivityLogger activityLogger, IClusterConfiguration clusterConfiguration, IPersistentProperties persistentProperties)
+        public LeaderVolatileProperties(IActivityLogger activityLogger, IClusterConfiguration clusterConfiguration, IPersistentStateHandler persistentProperties)
         {
             ActivityLogger = activityLogger;
             ClusterConfiguration = clusterConfiguration;
@@ -182,15 +180,15 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
 
             var priorValidTerm = await GetValidTermPriorToConflictingTerm(followerConflictTerm);
 
-            // If priorValidTerm is not the same as the supplied follower conflict term, then that means either the leader must not contain any entries from the followerConflictTerm
-            // or, the follower needs a full set of entries in any which case
+            /// If priorValidTerm is not the same as the supplied follower conflict term, then that means either the leader must not contain any entries from the followerConflictTerm
+            /// or, the follower needs a full set of entries in any which case
             bool doesFollowerHaveInvalidTerm = !priorValidTerm.Equals(followerConflictTerm);
 
             var firstIndexOfPriorValidTerm = await PersistentState.GetFirstIndexForTerm(priorValidTerm);
 
             if (doesFollowerHaveInvalidTerm)
             {
-                indices.NextIndex = firstIndexOfPriorValidTerm.Value; // Index is present as the term is present and valid in Leader's logs 
+                indices.NextIndex = firstIndexOfPriorValidTerm.Value; /// Index is present as the term is present and valid in Leader's logs 
 
                 ActivityLogger?.Log(new CoracleActivity
                 {
@@ -210,11 +208,11 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
             {
                 var leaderConflictingIndexEntry = await PersistentState.TryGetValueAtIndex(followerFirstIndexOfConflictingTerm);
 
-                // If follower doesn't have an invalid term, then we must check if the logs match up until followerFirstIndexOfConflictingTerm
+                /// If follower doesn't have an invalid term, then we must check if the logs match up until followerFirstIndexOfConflictingTerm
                 if (leaderConflictingIndexEntry != null && leaderConflictingIndexEntry.Term.Equals(followerConflictTerm))
                 {
-                    // Logs match up until the followerFirstIndexOfConflictingTerm, so we can send entries from
-                    // [followerFirstIndexOfConflictingTerm, leaderLastLogIndex] in the next AppendEntries RPC for the follower to confirm
+                    /// Logs match up until the followerFirstIndexOfConflictingTerm, so we can send entries from
+                    /// [followerFirstIndexOfConflictingTerm, leaderLastLogIndex] in the next AppendEntries RPC for the follower to confirm
 
                     indices.NextIndex = followerFirstIndexOfConflictingTerm;
 
@@ -233,7 +231,7 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
                 }
                 else
                 {
-                    // Logs do not match up, thus we send all entries from the first index of the leader term for that index of the conflicting entry
+                    /// Logs do not match up, thus we send all entries from the first index of the leader term for that index of the conflicting entry
 
                     var firstIndexOfleaderTermOfConflictingIndexEntry = await PersistentState.GetFirstIndexForTerm(leaderConflictingIndexEntry.Term);
 
@@ -332,11 +330,11 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
             .With(ActivityParam.New(totalNodesInCluster, totalNodes))
             .WithCallerInfo());
 
-            // Check for Majority
-            return Majority.IsAttained(peerNodeCountWhoHaveReplicatedGivenIndex + currentNode, totalNodes);
+            /// Check for Majority
+            return Majority.HasAttained(peerNodeCountWhoHaveReplicatedGivenIndex + currentNode, totalNodes);
         }
 
-        public void HandleConfigurationChange(IEnumerable<INodeConfiguration> newPeerNodeConfigurations)
+        public void UpdateMembership(IEnumerable<INodeConfiguration> newPeerNodeConfigurations)
         {
             var newClusterMemberIds = newPeerNodeConfigurations.ToDictionary(x => x.UniqueNodeId, y => y);
 

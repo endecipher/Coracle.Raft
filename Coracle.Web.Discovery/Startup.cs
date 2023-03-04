@@ -1,5 +1,5 @@
 using ActivityLogger.Logging;
-using Coracle.Raft.Engine.Discovery.Registrar;
+using Coracle.Samples.Registrar;
 using Coracle.Web.Discovery.Coracle.Logging;
 using Coracle.Web.Discovery.Coracle.Registrar;
 
@@ -21,30 +21,16 @@ namespace Coracle.Web.Discovery
             services.AddHttpClient();
             services.AddHttpContextAccessor();
             services.AddControllers();
-            // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             services.AddEndpointsApiExplorer();
-
-
-            services.Configure<DiscoveryLoggerOptions>(options =>
-            {
-                options.ConfigureHandler = false;
-            });
-
             services.AddScoped<INodeRegistrar, NodeRegistrar>();
             services.AddSingleton<INodeRegistry, NodeRegistry>();
-            services.AddSingleton<IActivityLogger, DiscoveryLoggerImpl>();
+            services.AddSingleton<IActivityLogger, DiscoveryActivityLogger>();
             services.AddSignalR();
-
-            //services.AddDefaultCorrelationId();
-
-            //services.AddMvc();//.AddRazorRuntimeCompilation();
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
             app.UseHttpsRedirection();
-
-            //app.UseCorrelationId();
 
             app.UseRouting();
 
@@ -52,9 +38,6 @@ namespace Coracle.Web.Discovery
 
             app.UseEndpoints(endpoints =>
             {
-                //endpoints.MapDefaultControllerRoute();
-                //endpoints.MapControllers();
-
                 endpoints.MapControllerRoute(
                     name: "default",
                     pattern: "{controller=Discovery}/{action=Get}/"

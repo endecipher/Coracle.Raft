@@ -24,9 +24,9 @@ namespace Coracle.Raft.Engine.States
         #region Node State Holder
 
         private object _lock = new object();
-        IChangingState _state = null;
+        IStateDevelopment _state = null;
 
-        IChangingState State
+        IStateDevelopment State
         {
             get
             {
@@ -49,7 +49,7 @@ namespace Coracle.Raft.Engine.States
             }
         }
 
-        public IChangingState Get()
+        public IStateDevelopment Get()
         {
             lock (_lock)
             {
@@ -57,7 +57,7 @@ namespace Coracle.Raft.Engine.States
             }
         }
 
-        public void UpdateWith(IChangingState changingState)
+        public void UpdateWith(IStateDevelopment changingState)
         {
             lock (_lock)
             {

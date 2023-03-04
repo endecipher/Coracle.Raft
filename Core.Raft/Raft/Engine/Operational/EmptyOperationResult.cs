@@ -1,6 +1,6 @@
 ﻿namespace Coracle.Raft.Engine.Operational
 {
-    public sealed class EmptyOperationResult : OperationalResult
+    public sealed class EmptyOperationResult : BaseOperationResult
     {
 
     }

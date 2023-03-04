@@ -10,8 +10,4 @@
     <ProjectReference Include="..\Core.Raft\Coracle.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Dependencies\" />
-  </ItemGroup>
-
 </Project>

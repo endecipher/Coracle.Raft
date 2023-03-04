@@ -11,7 +11,7 @@ namespace Coracle.Web
             Host.CreateDefaultBuilder(args)
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
-                    webBuilder.UseEnvironment("Development");
+                    webBuilder.UseEnvironment(Constants.Strings.Configuration.Development);
                     webBuilder.UseStartup<Startup>();
                 });
     }

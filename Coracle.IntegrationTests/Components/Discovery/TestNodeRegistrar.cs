@@ -1,9 +1,8 @@
 ﻿using ActivityLogger.Logging;
-using Coracle.IntegrationTests.Components.Logging;
 using Coracle.Raft.Engine.Configuration.Cluster;
 using Coracle.Raft.Engine.Discovery;
-using Coracle.Raft.Engine.Discovery.Registrar;
 using Coracle.Samples.Logging;
+using Coracle.Samples.Registrar;
 
 namespace Coracle.IntegrationTests.Components.Discovery
 {
@@ -21,7 +20,7 @@ namespace Coracle.IntegrationTests.Components.Discovery
 
         #endregion
 
-        public TestNodeRegistrar(INodeRegistry nodeRegistry, IActivityLogger activityLogger) //Add HttpClientFactory and check if it is a transient
+        public TestNodeRegistrar(INodeRegistry nodeRegistry, IActivityLogger activityLogger) 
         {
             NodeRegistry = nodeRegistry;
             ActivityLogger = activityLogger;
@@ -30,11 +29,6 @@ namespace Coracle.IntegrationTests.Components.Discovery
         public INodeRegistry NodeRegistry { get; }
         public IActivityLogger ActivityLogger { get; }
 
-        /// <summary>
-        /// Make it a setting
-        /// </summary>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
         public async Task Clear()
         {
             var allNodes = await NodeRegistry.GetAll();
@@ -45,20 +39,18 @@ namespace Coracle.IntegrationTests.Components.Discovery
             }
         }
 
-        public async Task<IDiscoveryOperation> Enroll(NodeConfiguration configuration, CancellationToken cancellationToken)
+        public async Task<DiscoveryResult> Enroll(NodeConfiguration configuration, CancellationToken cancellationToken)
         {
-            var res = new DiscoveryOperation();
+            var res = new DiscoveryResult();
 
             try
             {
                 await NodeRegistry.AddOrUpdate(configuration);
-                res.IsOperationSuccessful = true;
-
-                //AlertAllNodesForRefresh(cancellationToken).Start();
+                res.IsSuccessful = true;
             }
             catch (Exception ex)
             {
-                res.IsOperationSuccessful = false;
+                res.IsSuccessful = false;
                 res.Exception = ex;
             }
             finally
@@ -67,7 +59,7 @@ namespace Coracle.IntegrationTests.Components.Discovery
                 {
                     EntitySubject = NodeRegistrarEntity,
                     Event = EnrollingNew,
-                    Level = res.IsOperationSuccessful ? ActivityLogLevel.Debug : ActivityLogLevel.Error,
+                    Level = res.IsSuccessful ? ActivityLogLevel.Debug : ActivityLogLevel.Error,
                 }
                 .With(ActivityParam.New(Node, configuration))
                 .WithCallerInfo());
@@ -76,20 +68,18 @@ namespace Coracle.IntegrationTests.Components.Discovery
             return res;
         }
 
-        public async Task<IDiscoveryOperation> GetAllNodes(CancellationToken cancellationToken)
+        public async Task<DiscoveryResult> GetAllNodes(CancellationToken cancellationToken)
         {
-            var res = new DiscoveryOperation();
+            var res = new DiscoveryResult();
 
             try
             {
                 res.AllNodes = await NodeRegistry.GetAll();
-                res.IsOperationSuccessful = true;
-
-
+                res.IsSuccessful = true;
             }
             catch (Exception ex)
             {
-                res.IsOperationSuccessful = false;
+                res.IsSuccessful = false;
                 res.Exception = ex;
             }
             finally
@@ -98,7 +88,7 @@ namespace Coracle.IntegrationTests.Components.Discovery
                 {
                     EntitySubject = NodeRegistrarEntity,
                     Event = GetAll,
-                    Level = res.IsOperationSuccessful ? ActivityLogLevel.Debug : ActivityLogLevel.Error,
+                    Level = res.IsSuccessful ? ActivityLogLevel.Debug : ActivityLogLevel.Error,
                 }
                 .With(ActivityParam.New(Result, res))
                 .WithCallerInfo());

@@ -38,23 +38,17 @@ namespace Coracle.Raft.Engine.Actions.Core
 
         #endregion
 
-        /// <summary>
-        /// Cluster Configuration is taken dynamically, since values/uris may change
-        /// </summary>
         public override TimeSpan TimeOut => TimeSpan.FromMilliseconds(Input.EngineConfiguration.AppendEntriesTimeoutOnSend_InMilliseconds);
-
         public override string UniqueName => ActionName;
 
-        public OnSendAppendEntriesRPC(INodeConfiguration input, IChangingState state, OnSendAppendEntriesRPCContextDependencies actionDependencies, IActivityLogger activityLogger = null)
+        public OnSendAppendEntriesRPC(INodeConfiguration input, IStateDevelopment state, OnSendAppendEntriesRPCContextDependencies actionDependencies, IActivityLogger activityLogger = null)
             : base(new OnSendAppendEntriesRPCLogsContext(state, actionDependencies), activityLogger)
         {
             Input.NodeConfiguration = input;
-            Input.InvocationTime = DateTimeOffset.Now;
         }
 
         protected override Task<bool> ShouldProceed()
         {
-            // To check if state has not been abandoned, or the AppendEntries Configuration has not been changed, and that the sendee is still a CurrentNode of the Peers
             return Task.FromResult(Input.IsContextValid
                 && (Input.State as Leader).AppendEntriesManager.CanSendTowards(Input.NodeConfiguration.UniqueNodeId));
         }
@@ -67,7 +61,7 @@ namespace Coracle.Raft.Engine.Actions.Core
 
             AppendEntriesRPC callObject;
 
-            // Since NextIndex should be last Index + 1, any case which has nextIndex > lastLogIndex does not require any LogEntries to be sent
+            /// Since NextIndex should be last Index + 1, any case which has nextIndex > lastLogIndex does not require any LogEntries to be sent
             bool isHeartbeat = nextIndex > lastLogIndex;
 
             if (isHeartbeat)
@@ -78,7 +72,7 @@ namespace Coracle.Raft.Engine.Actions.Core
                 {
                     Term = currentTerm,
                     LeaderCommitIndex = Input.State.VolatileState.CommitIndex,
-                    LeaderId = Input.EngineConfiguration.NodeId, // Since current node is leader, and attempting to send outbound AppendEntries RPC
+                    LeaderId = Input.EngineConfiguration.NodeId, 
                     PreviousLogIndex = lastLogEntry.CurrentIndex,
                     PreviousLogTerm = lastLogEntry.Term,
                 };
@@ -156,7 +150,7 @@ namespace Coracle.Raft.Engine.Actions.Core
 
             Leader leader = Input.State as Leader;
 
-            if (!result.HasResponse) //If some exception ocurred
+            if (!result.IsSuccessful) //If some exception ocurred
             {
                 ActivityLogger?.Log(new CoracleActivity
                 {
@@ -190,7 +184,7 @@ namespace Coracle.Raft.Engine.Actions.Core
             /// All Servers: • If RPC request or response contains term T > currentTerm: set currentTerm = T, convert to follower (§5.1)
             /// <seealso cref="Figure 2 Rules For Servers"/>
             /// </remarks>
-            /// 
+
             if (result.Response.Term > currentTerm)
             {
                 currentTerm = result.Response.Term;
@@ -200,7 +194,6 @@ namespace Coracle.Raft.Engine.Actions.Core
                 /// then it updates its current term to the larger value.
                 /// <seealso cref="Section 5.1 Second-to-last para"/>
                 /// </remarks>
-                /// 
 
                 ActivityLogger?.Log(new CoracleActivity
                 {
@@ -228,7 +221,7 @@ namespace Coracle.Raft.Engine.Actions.Core
             }
             else
             {
-                //External Node denied AppendEntries RPC due to termMismatches or Conflicts
+                /// External Node denied AppendEntries RPC due to termMismatches or Conflicts
 
                 /// <remarks>
                 /// To bring a follower’s log into consistency with its own, the leader must find the latest log entry where the two
@@ -249,7 +242,7 @@ namespace Coracle.Raft.Engine.Actions.Core
                 /// <see cref="Section 5.3 Log Replication"/>
                 /// </remarks>
 
-                // For retry we have to update the NextIndex to a lower value so as to send more logs to the follower who responded false.
+                /// For retry we have to update the NextIndex to a lower value so as to send more logs to the follower who responded false.
 
                 if (result.Response.ConflictingEntryTermOnFailure.HasValue)
                 {

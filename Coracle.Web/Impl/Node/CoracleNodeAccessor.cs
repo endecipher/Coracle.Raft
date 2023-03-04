@@ -1,5 +1,4 @@
-﻿using Coracle.Raft.Engine.Configuration.Cluster;
-using Coracle.Raft.Engine.Node;
+﻿using Coracle.Raft.Engine.Node;
 using Coracle.Web.Impl.Remoting;
 using Microsoft.Extensions.Options;
 
@@ -7,7 +6,7 @@ namespace Coracle.Web.Impl.Node
 {
     public interface ICoracleNodeAccessor
     {
-        ICanoeNode CoracleNode { get; }
+        ICoracleNode CoracleNode { get; }
         IEngineConfiguration EngineConfig { get; }
         void Ready();
     }
@@ -15,11 +14,11 @@ namespace Coracle.Web.Impl.Node
     public class CoracleNodeAccessor : ICoracleNodeAccessor
     {
         private object _lock = new object();
-        private ICanoeNode _node = null;
+        private ICoracleNode _node = null;
 
         public IEngineConfiguration EngineConfig { get; }
 
-        public ICanoeNode CoracleNode
+        public ICoracleNode CoracleNode
         {
             get
             {
@@ -39,14 +38,11 @@ namespace Coracle.Web.Impl.Node
             }
         }
 
-        /// <remarks>
-        /// .NET DI Services and StructureMap jugalbandi
-        /// </remarks>
-        public CoracleNodeAccessor(IAppInfo appInfo, IEngineConfiguration engineConfig, ICanoeNode node, IOptions<EngineConfigurationOptions> engineConfigurationOptions)
+        public CoracleNodeAccessor(IAppInfo appInfo, IEngineConfiguration engineConfig, ICoracleNode node, IOptions<EngineConfigurationOptions> engineConfigurationOptions)
         {
             (engineConfig as EngineConfigurationSettings).ApplyFrom(engineConfigurationOptions.Value);
 
-            (engineConfig as EngineConfigurationSettings).ThisNodeUri = appInfo.GetCurrentAppUri();
+            (engineConfig as EngineConfigurationSettings).NodeUri = appInfo.GetCurrentAppUri();
 
             EngineConfig = engineConfig;
             

@@ -1,11 +1,11 @@
-﻿using Coracle.Raft.Engine.Actions.Core;
-using Coracle.Raft.Engine.Configuration;
+﻿using Coracle.Raft.Engine.Configuration.Alterations;
+using Coracle.Raft.Engine.Snapshots;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace Coracle.Raft.Engine.States.LeaderEntities
 {
-    internal interface ILeaderVolatileProperties : IHandleConfigurationChange
+    internal interface ILeaderVolatileProperties : IMembershipUpdate
     {
         bool AreMajorityOfServersHavingEntriesUpUntilIndexReplicated(long index);
         Task DecrementNextIndex(string externalServerId, long followerConflictTerm, long followerFirstIndexOfConflictingTerm);

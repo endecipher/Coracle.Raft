@@ -1,7 +1,7 @@
 ﻿using ActivityLogger.Logging;
-using Coracle.Raft.Engine.Configuration.Cluster;
 using Coracle.Raft.Engine.ActivityLogger;
 using System.Threading;
+using Coracle.Raft.Engine.Node;
 
 namespace Coracle.Raft.Engine.Helper
 {
@@ -10,7 +10,6 @@ namespace Coracle.Raft.Engine.Helper
         #region Constants
 
         public const string InitiatingCallback = nameof(InitiatingCallback);
-        public const string Disposing = nameof(Disposing);
         public const string HeartbeatTimerEntity = nameof(HeartbeatTimer);
         public const string TimeOut = nameof(TimeOut);
 
@@ -49,15 +48,6 @@ namespace Coracle.Raft.Engine.Helper
 
         public void Dispose()
         {
-            ActivityLogger?.Log(new CoracleActivity
-            {
-                EntitySubject = HeartbeatTimerEntity,
-                Event = Disposing,
-                Level = ActivityLogLevel.Verbose,
-
-            }
-            .WithCallerInfo());
-
             Timer?.Dispose();
         }
     }

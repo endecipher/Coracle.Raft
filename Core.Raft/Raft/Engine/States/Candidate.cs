@@ -10,7 +10,7 @@ namespace Coracle.Raft.Engine.States
     internal interface ICandidateDependencies : IStateDependencies
     {
         IElectionManager ElectionManager { get; set; }
-        IRemoteManager RemoteManager { get; set; }
+        IOutboundRequestHandler RemoteManager { get; set; }
     }
 
     internal sealed class Candidate : AbstractState, ICandidateDependencies
@@ -23,7 +23,7 @@ namespace Coracle.Raft.Engine.States
 
         #region Additional Dependencies
         public IElectionManager ElectionManager { get; set; }
-        public IRemoteManager RemoteManager { get; set; }
+        public IOutboundRequestHandler RemoteManager { get; set; }
 
         #endregion
 
@@ -89,8 +89,6 @@ namespace Coracle.Raft.Engine.States
             ElectionManager.CancelSessionIfExists();
 
             await base.OnStateChangeBeginDisposal();
-
-            //TODO: Handle Election Timeouts in Abstract, since we don't want it to invoke any handlers until State is resumed
         }
 
         public override async Task OnStateEstablishment()
@@ -100,9 +98,9 @@ namespace Coracle.Raft.Engine.States
             await StartElection();
         }
 
-        public override void HandleConfigurationChange(IEnumerable<INodeConfiguration> newPeerNodeConfigurations)
+        public override void UpdateMembership(IEnumerable<INodeConfiguration> newPeerNodeConfigurations)
         {
-            ElectionManager.HandleConfigurationChange(newPeerNodeConfigurations);
+            ElectionManager.UpdateMembership(newPeerNodeConfigurations);
         }
     }
 }

@@ -1,13 +1,18 @@
-using System;
-
 namespace Coracle.Raft.Engine.Remoting.RPC
 {
-    [Serializable]
+    public interface IRequestVoteRPC : IRemoteCall
+    {
+        string CandidateId { get; }
+        long LastLogIndex { get; }
+        long LastLogTerm { get; }
+        long Term { get; }
+    }
+
     public class RequestVoteRPC : IRequestVoteRPC
     {
-        public long Term { get; init; }
-        public string CandidateId { get; init; }
-        public long LastLogIndex { get; init; }
-        public long LastLogTerm { get; init; }
+        public long Term { get; set; }
+        public string CandidateId { get; set; }
+        public long LastLogIndex { get; set; }
+        public long LastLogTerm { get; set; }
     }
 }

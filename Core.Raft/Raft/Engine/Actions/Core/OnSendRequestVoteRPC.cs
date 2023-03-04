@@ -18,14 +18,14 @@ namespace Coracle.Raft.Engine.Actions.Core
     {
         #region Constants
         public const string ActionName = nameof(OnSendRequestVoteRPC);
-        private const string electionTerm = nameof(electionTerm);
-        private const string towardsNode = nameof(towardsNode);
-        private const string Sending = nameof(Sending);
-        private const string RevertingToFollower = nameof(RevertingToFollower);
-        private const string callObj = nameof(callObj);
-        private const string Received = nameof(Received);
-        private const string responseObject = nameof(responseObject);
-        private const string SendingOnException = nameof(SendingOnException);
+        public const string electionTerm = nameof(electionTerm);
+        public const string towardsNode = nameof(towardsNode);
+        public const string Sending = nameof(Sending);
+        public const string RevertingToFollower = nameof(RevertingToFollower);
+        public const string callObj = nameof(callObj);
+        public const string Received = nameof(Received);
+        public const string responseObject = nameof(responseObject);
+        public const string SendingOnException = nameof(SendingOnException);
         #endregion
 
         public override string UniqueName => ActionName;
@@ -33,25 +33,14 @@ namespace Coracle.Raft.Engine.Actions.Core
 
         public OnSendRequestVoteRPC(INodeConfiguration targetNode, long currentTerm, OnSendRequestVoteRPCContextDependencies actionDependencies, IActivityLogger activityLogger = null) : base(new OnSendRequestVoteRPCContext(targetNode, currentTerm, actionDependencies)
         {
-            InvocationTime = DateTimeOffset.UtcNow,
-
         }, activityLogger)
         { }
 
-        /// <summary>
-        /// We will fail if a previous Election's Event Action is being fired
-        /// </summary>
-        /// <returns></returns>
         protected override Task<bool> ShouldProceed()
         {
             return Task.FromResult(Input.IsContextValid && (Input.State as Candidate).ElectionManager.CanSendTowards(Input.NodeConfiguration.UniqueNodeId, Input.ElectionTerm));
         }
 
-        /// <summary>
-        /// Framing Request
-        /// </summary>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
         protected override async Task<IRequestVoteRPCResponse> Action(CancellationToken cancellationToken)
         {
             var lastLogEntry = await Input.PersistentState.TryGetValueAtLastIndex();
@@ -97,7 +86,7 @@ namespace Coracle.Raft.Engine.Actions.Core
             .With(ActivityParam.New(towardsNode, Input.NodeConfiguration))
             .WithCallerInfo());
 
-            if (!result.HasResponse)
+            if (!result.IsSuccessful)
             {
                 ActivityLogger?.Log(new CoracleActivity
                 {
@@ -121,7 +110,7 @@ namespace Coracle.Raft.Engine.Actions.Core
             /// All Servers: • If RPC request or response contains term T > currentTerm: set currentTerm = T, convert to follower (§5.1)
             /// <seealso cref="Figure 2 Rules For Servers"/>
             /// </remarks>
-            /// 
+
             if (result.Response.Term > Input.ElectionTerm)
             {
                 /// <remarks>
@@ -129,7 +118,6 @@ namespace Coracle.Raft.Engine.Actions.Core
                 /// then it updates its current term to the larger value.
                 /// <seealso cref="Section 5.1 Second-to-last para"/>
                 /// </remarks>
-                /// 
 
                 ActivityLogger?.Log(new CoracleActivity
                 {

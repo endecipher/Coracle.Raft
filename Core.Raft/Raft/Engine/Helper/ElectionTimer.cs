@@ -1,4 +1,4 @@
-﻿using Coracle.Raft.Engine.Configuration.Cluster;
+﻿using Coracle.Raft.Engine.Node;
 using System;
 using System.Threading;
 
@@ -15,13 +15,11 @@ namespace Coracle.Raft.Engine.Helper
             Config = engineConfiguration;
         }
 
-        public IElectionTimer RegisterNew(TimerCallback timerCallback)
+        public void RegisterNew(TimerCallback timerCallback)
         {
             var timeOutInMilliseconds = Convert.ToInt32(RandomTimeout.TotalMilliseconds);
 
             Timer = new Timer(timerCallback, null, timeOutInMilliseconds, timeOutInMilliseconds);
-
-            return this;
         }
 
         /// <summary>

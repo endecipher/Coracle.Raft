@@ -1,11 +1,11 @@
 ﻿using ActivityLogger.Logging;
-using Coracle.Raft.Engine.Configuration;
 using Coracle.Raft.Engine.Configuration.Cluster;
 using Coracle.Raft.Engine.Helper;
 using Coracle.Raft.Engine.ActivityLogger;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Coracle.Raft.Engine.States.LeaderEntities;
+using Coracle.Raft.Engine.Configuration.Alterations;
 
 namespace Coracle.Raft.Engine.States
 {
@@ -77,7 +77,6 @@ namespace Coracle.Raft.Engine.States
 
             AppendEntriesManager.Initialize();
 
-            //COMMENT: Recognize itself as Leader
             LeaderNodePronouncer.SetRunningNodeAsLeader();
 
             /// <remarks>
@@ -87,7 +86,6 @@ namespace Coracle.Raft.Engine.States
             ElectionTimer.Dispose();
 
             /// <remarks>
-            /// 
             /// Read-only operations can be handled without writing
             /// anything into the log. 
             /// 
@@ -157,7 +155,7 @@ namespace Coracle.Raft.Engine.States
 
             var currentTerm = await PersistentState.GetCurrentTerm();
 
-            var lastLogEntryIndexForTerm = await PersistentState.GetLastIndexForTerm(currentTerm);
+            var lastLogEntryIndexForTerm = (await PersistentState.GetLastIndexForTerm(currentTerm)).Value;
 
             var firstLogEntryIndexForTerm = (await PersistentState.GetFirstIndexForTerm(currentTerm)).Value;
 
@@ -180,7 +178,6 @@ namespace Coracle.Raft.Engine.States
 
                     if (LeaderProperties.AreMajorityOfServersHavingEntriesUpUntilIndexReplicated(i) && logTerm == currentTerm)
                     {
-                        //TODO: Introduce Object Locks
                         UpdateCommitIndex(i);
 
                         return;
@@ -189,10 +186,10 @@ namespace Coracle.Raft.Engine.States
             }
         }
 
-        public override void HandleConfigurationChange(IEnumerable<INodeConfiguration> newPeerNodeConfigurations)
+        public override void UpdateMembership(IEnumerable<INodeConfiguration> newPeerNodeConfigurations)
         {
-            (AppendEntriesManager as IHandleConfigurationChange).HandleConfigurationChange(newPeerNodeConfigurations);
-            (LeaderProperties as IHandleConfigurationChange).HandleConfigurationChange(newPeerNodeConfigurations);
+            (AppendEntriesManager as IMembershipUpdate).UpdateMembership(newPeerNodeConfigurations);
+            (LeaderProperties as IMembershipUpdate).UpdateMembership(newPeerNodeConfigurations);
         }
     }
 }

@@ -8,6 +8,7 @@ using TaskGuidance.BackgroundProcessing.Actions;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Coracle.Raft.Engine.Snapshots;
 
 namespace Coracle.Raft.Engine.Actions.Core
 {
@@ -15,7 +16,6 @@ namespace Coracle.Raft.Engine.Actions.Core
     /// The leader can decide where to place new entries in the log without consulting other servers, and data flows in a simple fashion
     /// from the leader to other servers
     /// <see cref="Section 5"/>
-    /// 
     /// 
     /// AppendEntriesRPC with LogEntries.Count > 0 to be sent to one single external node; only invoked from the leader.
     /// </summary>
@@ -38,32 +38,27 @@ namespace Coracle.Raft.Engine.Actions.Core
         public const string ResendFull = nameof(ResendFull);
         #endregion
 
-        /// <summary>
-        /// Cluster Configuration is taken dynamically, since values/uris may change
-        /// </summary>
         public override TimeSpan TimeOut => TimeSpan.FromMilliseconds(Input.EngineConfiguration.InstallSnapshotChunkTimeoutOnSend_InMilliseconds);
 
         public override string UniqueName => ActionName;
 
-        public OnSendInstallSnapshotChunkRPC(INodeConfiguration input, IChangingState state, ISnapshotHeader snapshotHeader, int chunkOffset, OnSendInstallSnapshotChunkRPCContextDependencies actionDependencies, IActivityLogger activityLogger = null)
+        public OnSendInstallSnapshotChunkRPC(INodeConfiguration input, IStateDevelopment state, ISnapshotHeader snapshotHeader, int chunkOffset, OnSendInstallSnapshotChunkRPCContextDependencies actionDependencies, IActivityLogger activityLogger = null)
             : base(new OnSendInstallSnapshotChunkRPCContext(state, actionDependencies), activityLogger)
         {
             Input.NodeConfiguration = input;
             Input.SnapshotHeader = snapshotHeader;
             Input.Offset = chunkOffset;
-            Input.InvocationTime = DateTimeOffset.Now;
         }
 
         protected override Task<bool> ShouldProceed()
         {
-            // To check if state has not been abandoned, or the AppendEntries Configuration has not been changed, and that the sendee is still a CurrentNode of the Peers
             return Task.FromResult(Input.IsContextValid
                 && (Input.State as Leader).AppendEntriesManager.CanSendTowards(Input.NodeConfiguration.UniqueNodeId));
         }
 
         protected override async Task<IInstallSnapshotRPCResponse> Action(CancellationToken cancellationToken)
         {
-            var isSnapshotStillAvailable = await Input.PersistentState.IsInputSnapshotCommittedAndAvailableInLog(Input.SnapshotHeader);
+            var isSnapshotStillAvailable = await Input.PersistentState.IsCommittedSnapshot(Input.SnapshotHeader);
 
             if (!isSnapshotStillAvailable)
             {
@@ -121,7 +116,7 @@ namespace Coracle.Raft.Engine.Actions.Core
 
                 Leader leader = Input.State as Leader;
 
-                if (!result.HasResponse) //If some exception ocurred
+                if (!result.IsSuccessful) 
                 {
                     ActivityLogger?.Log(new CoracleActivity
                     {
@@ -155,7 +150,7 @@ namespace Coracle.Raft.Engine.Actions.Core
                 /// All Servers: • If RPC request or response contains term T > currentTerm: set currentTerm = T, convert to follower (§5.1)
                 /// <seealso cref="Figure 2 Rules For Servers"/>
                 /// </remarks>
-                /// 
+
                 if (result.Response.Term > rpc.Term)
                 {
                     /// <remarks>
@@ -163,7 +158,6 @@ namespace Coracle.Raft.Engine.Actions.Core
                     /// then it updates its current term to the larger value.
                     /// <seealso cref="Section 5.1 Second-to-last para"/>
                     /// </remarks>
-                    /// 
 
                     ActivityLogger?.Log(new CoracleActivity
                     {

@@ -1,8 +1,6 @@
-﻿using System;
-
-namespace Coracle.Raft.Engine.Exceptions
+﻿namespace Coracle.Raft.Engine.Exceptions
 {
-    public class ConfigurationChangeDeniedException : Exception
+    public class ConfigurationChangeDeniedException : AbstractDeniedException
     {
         public ConfigurationChangeDeniedException(string message) : base(message)
         {
@@ -11,8 +9,7 @@ namespace Coracle.Raft.Engine.Exceptions
 
         public static ConfigurationChangeDeniedException New()
         {
-            return new ConfigurationChangeDeniedException("This Node is currently in Candidate/Follower state. Please forwarding to leader. ");
+            return new ConfigurationChangeDeniedException(string.Empty);
         }
     }
-
 }

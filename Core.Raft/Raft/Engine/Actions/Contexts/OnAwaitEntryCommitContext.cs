@@ -1,6 +1,5 @@
-﻿using Coracle.Raft.Engine.Configuration.Cluster;
+﻿using Coracle.Raft.Engine.Node;
 using Coracle.Raft.Engine.States;
-using System;
 
 namespace Coracle.Raft.Engine.Actions.Contexts
 {
@@ -8,7 +7,7 @@ namespace Coracle.Raft.Engine.Actions.Contexts
     internal sealed class OnAwaitEntryCommitContextDependencies
     {
         public ICurrentStateAccessor CurrentStateAccessor { get; set; }
-        public IPersistentProperties PersistentState { get; set; }
+        public IPersistentStateHandler PersistentState { get; set; }
         public IEngineConfiguration EngineConfiguration { get; set; }
     }
 
@@ -22,19 +21,15 @@ namespace Coracle.Raft.Engine.Actions.Contexts
         }
 
         public bool IsContextValid => !State.IsDisposed && !State.StateValue.IsAbandoned() && !State.StateValue.IsStopped();
-
         internal long LogEntryIndex { get; }
-        internal IChangingState State => CurrentStateAccessor.Get();
-
-        internal DateTimeOffset InvocationTime { get; set; }
-
+        internal IStateDevelopment State => CurrentStateAccessor.Get();
         OnAwaitEntryCommitContextDependencies Dependencies { get; set; }
 
         #region Action Dependencies
 
         internal ICurrentStateAccessor CurrentStateAccessor => Dependencies.CurrentStateAccessor;
         internal IEngineConfiguration EngineConfiguration => Dependencies.EngineConfiguration;
-        internal IPersistentProperties PersistentState => Dependencies.PersistentState;
+        internal IPersistentStateHandler PersistentState => Dependencies.PersistentState;
 
         #endregion
 

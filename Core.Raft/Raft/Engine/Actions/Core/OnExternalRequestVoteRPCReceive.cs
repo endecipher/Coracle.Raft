@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 namespace Coracle.Raft.Engine.Actions.Core
 {
     /// <summary>
-    /// If we receive this, then surely there exists an External Candidate Fellow Server. 
+    /// If we receive this, then surely there exists an External Candidate Server
     /// </summary>
     internal sealed class OnExternalRequestVoteRPCReceive : BaseAction<OnExternalRPCReceiveContext<RequestVoteRPC>, RequestVoteRPCResponse>
     {
@@ -23,9 +23,9 @@ namespace Coracle.Raft.Engine.Actions.Core
         public const string CandidateNotPartOfCluster = nameof(CandidateNotPartOfCluster);
         public const string inputRequest = nameof(inputRequest);
         public const string DeniedSinceAlreadyVoted = nameof(DeniedSinceAlreadyVoted);
-        public const string VotedFor = nameof(VotedFor);
+        public const string votedFor = nameof(votedFor);
         public const string DeniedDueToLogMismatch = nameof(DeniedDueToLogMismatch);
-        public const string LastLogEntryPersisted = nameof(LastLogEntryPersisted);
+        public const string lastLogEntryPersisted = nameof(lastLogEntryPersisted);
         public const string DeniedByDefault = nameof(DeniedByDefault);
 
         #endregion
@@ -34,7 +34,7 @@ namespace Coracle.Raft.Engine.Actions.Core
         public override string UniqueName => ActionName;
         public override TimeSpan TimeOut => TimeSpan.FromMilliseconds(Input.EngineConfiguration.RequestVoteTimeoutOnReceive_InMilliseconds);
 
-        public OnExternalRequestVoteRPCReceive(RequestVoteRPC input, IChangingState state, OnExternalRPCReceiveContextDependencies actionDependencies, IActivityLogger activityLogger = null) : base(new OnExternalRPCReceiveContext<RequestVoteRPC>(state, actionDependencies)
+        public OnExternalRequestVoteRPCReceive(RequestVoteRPC input, IStateDevelopment state, OnExternalRPCReceiveContextDependencies actionDependencies, IActivityLogger activityLogger = null) : base(new OnExternalRPCReceiveContext<RequestVoteRPC>(state, actionDependencies)
         {
             Request = input
         }, activityLogger)
@@ -59,6 +59,7 @@ namespace Coracle.Raft.Engine.Actions.Core
             /// <remarks>
             /// In case an abandoned node starts to send out vote requests, we deny them. As the node is not part of cluster.
             /// </remarks>
+
             if (Input.ClusterConfigurationChanger.HasNodeBeenRemoved(Input.Request.CandidateId))
             {
                 ActivityLogger?.Log(new CoracleActivity
@@ -78,7 +79,7 @@ namespace Coracle.Raft.Engine.Actions.Core
             /// All Servers: • If RPC request or response contains term T > currentTerm: set currentTerm = T, convert to follower (§5.1)
             /// <seealso cref="Figure 2 Rules For Servers"/>
             /// </remarks>
-            /// 
+
             if (Input.Request.Term > Term)
             {
                 Term = Input.Request.Term;
@@ -104,7 +105,7 @@ namespace Coracle.Raft.Engine.Actions.Core
                 .With(ActivityParam.New(inputRequest, Input.Request))
                 .WithCallerInfo());
 
-                // Updating Response since Term has changed
+                /// Updating Response since Term has changed
                 response = new RequestVoteRPCResponse
                 {
                     Term = Term,
@@ -151,7 +152,7 @@ namespace Coracle.Raft.Engine.Actions.Core
 
                 }
                 .With(ActivityParam.New(inputRequest, Input.Request))
-                .With(ActivityParam.New(VotedFor, votedFor))
+                .With(ActivityParam.New(OnExternalRequestVoteRPCReceive.votedFor, votedFor))
                 .WithCallerInfo());
 
                 return response;
@@ -209,7 +210,7 @@ namespace Coracle.Raft.Engine.Actions.Core
 
                 }
                 .With(ActivityParam.New(inputRequest, Input.Request))
-                .With(ActivityParam.New(LastLogEntryPersisted, lastLogEntryPersisted))
+                .With(ActivityParam.New(OnExternalRequestVoteRPCReceive.lastLogEntryPersisted, lastLogEntryPersisted))
                 .WithCallerInfo());
             }
 
@@ -227,8 +228,8 @@ namespace Coracle.Raft.Engine.Actions.Core
             return response;
         }
 
-        // This is done so that NewResponsibilities can be configured AFTER we respond to this request.
-        // This is done to avoid the chances of current Task cancellation.
+        /// This is done so that NewResponsibilities can be configured AFTER we respond to this request.
+        /// This is done to avoid the chances of current Task cancellation.
         protected override Task OnActionEnd()
         {
             if (Input.TurnToFollower)

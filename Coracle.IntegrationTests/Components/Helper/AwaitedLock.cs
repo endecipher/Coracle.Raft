@@ -1,4 +1,4 @@
-﻿namespace Coracle.IntegrationTests.Framework
+﻿namespace Coracle.IntegrationTests.Components.Helper
 {
     public class AwaitedLock
     {
@@ -6,8 +6,6 @@
         bool KeepApproving { get; set; } = false;
 
         public AutoResetEvent AutoResetEvent = new AutoResetEvent(false);
-
-        //public IActionLock ContinueTesting = new ActionLock(canReset: true);
 
         public void ApproveNext()
         {
@@ -21,7 +19,8 @@
 
         public bool IsApproved()
         {
-            lock (_lock) {
+            lock (_lock)
+            {
 
                 if (KeepApproving)
                 {
@@ -30,7 +29,7 @@
                     return true;
                 }
 
-                return false; 
+                return false;
             }
         }
     }

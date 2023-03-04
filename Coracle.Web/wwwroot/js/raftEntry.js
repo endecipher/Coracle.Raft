@@ -54,8 +54,6 @@ connectionRaft.on("ReceiveEntries", function (log) {
 
         removeChildren('coracleCluster');
 
-        //$('#coracleCluster').html(value);
-
         let arr = JSON.parse(value);
 
         for (let i = 0; i < arr.length; i++) {
@@ -108,7 +106,7 @@ connectionRaft.on("ReceiveEntries", function (log) {
 
 
 connectionRaft.start().then(function () {
-    console.log('Connection Started');
+    console.log('RaftHub Connection Started');
 }).catch(function (err) {
     return console.error(err.toString());
 });

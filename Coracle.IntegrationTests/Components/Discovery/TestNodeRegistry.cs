@@ -1,5 +1,5 @@
 ﻿using Coracle.Raft.Engine.Configuration.Cluster;
-using Coracle.Raft.Engine.Discovery.Registrar;
+using Coracle.Samples.Registrar;
 using System.Collections.Concurrent;
 
 namespace Coracle.IntegrationTests.Components.Discovery
@@ -17,7 +17,7 @@ namespace Coracle.IntegrationTests.Components.Discovery
 
         public Task<IEnumerable<NodeConfiguration>> GetAll()
         {
-            return Task.FromResult((IEnumerable<NodeConfiguration>)MemoryRegistry.Values.AsEnumerable());
+            return Task.FromResult(MemoryRegistry.Values.AsEnumerable());
         }
 
         public Task TryRemove(string nodeId)

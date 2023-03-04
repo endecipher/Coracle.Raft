@@ -1,5 +1,4 @@
 ﻿using ActivityLogger.Logging;
-using Coracle.Raft.Engine.Configuration;
 using Coracle.Raft.Engine.Configuration.Cluster;
 using Coracle.Raft.Engine.Remoting;
 using Coracle.Raft.Engine.Actions.Contexts;
@@ -13,6 +12,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Coracle.Raft.Engine.Actions.Core;
 using Coracle.Raft.Engine.Helper;
+using Coracle.Raft.Engine.Node;
 
 namespace Coracle.Raft.Engine.States
 {
@@ -56,23 +56,21 @@ namespace Coracle.Raft.Engine.States
         IActivityLogger ActivityLogger { get; }
         IClusterConfiguration ClusterConfiguration { get; }
         IEngineConfiguration EngineConfiguration { get; }
-        IRemoteManager RemoteManager { get; }
+        IOutboundRequestHandler RemoteManager { get; }
         IResponsibilities Responsibilities { get; }
         ICurrentStateAccessor CurrentStateAccessor { get; }
-        IPersistentProperties PersistentProperties { get; }
-
-        long IElectionManager.CurrentTerm => throw new NotImplementedException();
-
-
+        IPersistentStateHandler PersistentProperties { get; }
+        ISystemClock SystemClock { get; }
 
         public ElectionManager(
             IActivityLogger activityLogger,
             IClusterConfiguration clusterConfiguration,
             IEngineConfiguration engineConfiguration,
-            IRemoteManager remoteManager,
+            IOutboundRequestHandler remoteManager,
             IResponsibilities responsibilities,
             ICurrentStateAccessor currentStateAccessor,
-            IPersistentProperties persistentProperties)
+            IPersistentStateHandler persistentProperties,
+            ISystemClock systemClock)
         {
             ActivityLogger = activityLogger;
             ClusterConfiguration = clusterConfiguration;
@@ -81,6 +79,7 @@ namespace Coracle.Raft.Engine.States
             Responsibilities = responsibilities;
             CurrentStateAccessor = currentStateAccessor;
             PersistentProperties = persistentProperties;
+            SystemClock = systemClock;
 
             lock (_termLock)
             {
@@ -100,8 +99,6 @@ namespace Coracle.Raft.Engine.States
             .With(ActivityParam.New(electionTerm, term))
             .WithCallerInfo());
 
-            //TODO: ENSURE ONFIGURATIONS AND NEW DEPENDENCIES ARE ADDED IN REGISTRATION AND STATECHAMGER
-
             CancelSessionIfExists();
 
             VotingTokenSource = new CancellationTokenSource();
@@ -115,7 +112,7 @@ namespace Coracle.Raft.Engine.States
                     CurrentPeers.TryAdd(config.UniqueNodeId, new NodeDetails
                     {
                         NodeConfiguration = config,
-                        LastPinged = DateTimeOffset.UnixEpoch,
+                        LastPinged = SystemClock.Epoch(),
                         VoteGranted = false
                     });
                 }
@@ -168,9 +165,9 @@ namespace Coracle.Raft.Engine.States
         {
             var validVotes = CurrentPeers.Values.Where(x => x.VoteGranted).Count();
 
-            // In almost all cases, the Candidate will vote for itself first, and then start the Election.
-            // However, if the Cluster Configuration changes in such a case, and the current node is no longer part of the cluster,
-            // it will decomission itself, thus making no sense to go forward with the election
+            /// In almost all cases, the Candidate will vote for itself first, and then start the Election.
+            /// However, if the Cluster Configuration changes in such a case, and the current node is no longer part of the cluster,
+            /// it will decommission itself, thus making no sense to go forward with the election
             if (!ClusterConfiguration.IsThisNodePartOfCluster)
             {
                 CancelSessionIfExists();
@@ -178,9 +175,9 @@ namespace Coracle.Raft.Engine.States
 
             const int self = 1;
 
-            bool hasMajorityAttained = Majority.IsAttained(validVotes + self, CurrentPeers.Count + self);
+            bool hasMajorityAttained = Majority.HasAttained(validVotes + self, CurrentPeers.Count + self);
 
-            // Lock Introduced, since multiple threads may call this method parallely, invoking StateChanger multiple times
+            /// Lock Introduced, since multiple threads may call this method parallely, invoking StateChanger multiple times
             lock (_termLock)
             {
                 /// <remarks>
@@ -233,8 +230,7 @@ namespace Coracle.Raft.Engine.States
                 return;
             }
 
-            nodeDetails.LastPinged = DateTime.UtcNow;
-            //.Information.LastPinged = DateTimeOffset.UtcNow;
+            nodeDetails.LastPinged = SystemClock.Now();
 
             if (!term.Equals(CurrentTerm))
             {
@@ -287,7 +283,7 @@ namespace Coracle.Raft.Engine.States
                 return;
             }
 
-            nodeDetails.VoteGranted = voteGranted; // Vote Granted is true, thus we update the findings and check for Majority
+            nodeDetails.VoteGranted = voteGranted; /// Vote Granted is true, thus we update the findings and check for Majority
 
             ActivityLogger?.Log(new CoracleActivity
             {
@@ -350,7 +346,7 @@ namespace Coracle.Raft.Engine.States
         {
             if (CurrentPeers.TryGetValue(uniqueNodeId, out var nodeDetails))
             {
-                nodeDetails.LastPinged = DateTimeOffset.UtcNow;
+                nodeDetails.LastPinged = SystemClock.Now();
 
                 new Task(() =>
                 {
@@ -360,7 +356,7 @@ namespace Coracle.Raft.Engine.States
             }
         }
 
-        public void HandleConfigurationChange(IEnumerable<INodeConfiguration> newPeerNodeConfigurations)
+        public void UpdateMembership(IEnumerable<INodeConfiguration> newPeerNodeConfigurations)
         {
             var newClusterMemberIds = newPeerNodeConfigurations.ToDictionary(x => x.UniqueNodeId, y => y);
 
@@ -378,18 +374,18 @@ namespace Coracle.Raft.Engine.States
                 }
             }
 
-            // If any remaining, which have not been removed yet
+            /// If any remaining, which have not been removed yet
             var serverIdsWhichHaveBeenAdded = newClusterMemberIds;
 
-            // Since we want the Cluster Configuration to change immediately, any RequestVote actions which might be performing now
-            // will have to check CurrentNodeIds whether they can perform or not
+            /// Since we want the Cluster Configuration to change immediately, any RequestVote actions which might be performing now
+            /// will have to check CurrentNodeIds whether they can perform or not
 
             foreach (var node in serverIdsWhichHaveBeenAdded)
             {
                 CurrentPeers.TryAdd(node.Key, new NodeDetails
                 {
                     NodeConfiguration = node.Value,
-                    LastPinged = DateTimeOffset.UnixEpoch,
+                    LastPinged = SystemClock.Epoch(),
                     VoteGranted = false
                 });
             }

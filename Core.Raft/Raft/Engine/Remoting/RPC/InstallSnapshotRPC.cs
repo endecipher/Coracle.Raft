@@ -1,25 +1,18 @@
-using Coracle.Raft.Engine.Actions.Core;
-using Coracle.Raft.Engine.Logs;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-
 namespace Coracle.Raft.Engine.Remoting.RPC
 {
     public interface IInstallSnapshotRPC : IRemoteCall
     {
-        string SnapshotId { get; set; }
-        long Term { get; set; }
-        string LeaderId { get; set; }
-        long LastIncludedIndex { get; set; }
-        long LastIncludedTerm { get; set; }
-        int Offset { get; set; }
-        object Data { get; set; }
-        bool Done { get; set; }
+        string SnapshotId { get; }
+        long Term { get; }
+        string LeaderId { get; }
+        long LastIncludedIndex { get; }
+        long LastIncludedTerm { get; }
+        int Offset { get; }
+        object Data { get; }
+        bool Done { get; }
 
     }
 
-    [Serializable]
     public class InstallSnapshotRPC : IInstallSnapshotRPC
     {
         public string SnapshotId { get; set; }

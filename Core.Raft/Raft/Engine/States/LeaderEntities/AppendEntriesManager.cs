@@ -1,9 +1,7 @@
 ﻿using ActivityLogger.Logging;
-using Coracle.Raft.Engine.Actions.Awaiters;
 using Coracle.Raft.Engine.Actions.Contexts;
 using Coracle.Raft.Engine.Actions.Core;
 using Coracle.Raft.Engine.ActivityLogger;
-using Coracle.Raft.Engine.Configuration;
 using Coracle.Raft.Engine.Configuration.Cluster;
 using Coracle.Raft.Engine.Remoting;
 using TaskGuidance.BackgroundProcessing.Core;
@@ -12,7 +10,11 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Coracle.Raft.Engine.Remoting.RPC;
+using Coracle.Raft.Engine.Configuration.Alterations;
+using Coracle.Raft.Engine.Node;
+using Coracle.Raft.Engine.Actions;
+using Coracle.Raft.Engine.Snapshots;
+using Coracle.Raft.Engine.Helper;
 
 namespace Coracle.Raft.Engine.States.LeaderEntities
 {
@@ -30,10 +32,12 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
             {
                 if (IsRpcSent)
                 {
-                    return false; //Since an ongoing outbound request already exists
+                    ///Since an ongoing outbound request already exists
+                    return false; 
                 }
 
-                IsRpcSent = true; // Marking for current request
+                /// Marking for current request
+                IsRpcSent = true; 
                 return true;
             }
         }
@@ -107,10 +111,12 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
             {
                 if (IsRpcSent)
                 {
-                    return false; //Since an ongoing outbound request already exists
+                    ///Since an ongoing outbound request already exists
+                    return false; 
                 }
 
-                IsRpcSent = true; // Marking for current request
+                /// Marking for current request
+                IsRpcSent = true; 
                 return true;
             }
         }
@@ -134,10 +140,7 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
     /// </remarks>
     /// 
 
-    //TODO: Change this to a tighter outbound request sending machine. This should be the one which sends out multiple requests, not the states. 
-    //Same for Election session
-    //Alos, any outbound Event Action which fails, should send an event to this, so that retry can occur with fresh properties. Do not rely on times, like LastPinged times etc
-    internal class AppendEntriesManager : IAppendEntriesManager, IHandleConfigurationChange
+    internal class AppendEntriesManager : IAppendEntriesManager, IMembershipUpdate
     {
         #region Constants
 
@@ -158,9 +161,10 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
         IEngineConfiguration EngineConfiguration { get; }
         IGlobalAwaiter GlobalAwaiter { get; }
         ICurrentStateAccessor CurrentStateAccessor { get; }
-        IPersistentProperties PersistentState { get; }
-        IRemoteManager RemoteManager { get; }
+        IPersistentStateHandler PersistentState { get; }
+        IOutboundRequestHandler RemoteManager { get; }
         IResponsibilities Responsibilities { get; }
+        ISystemClock SystemClock { get; }
 
         public AppendEntriesManager(
             IActivityLogger activityLogger,
@@ -168,9 +172,10 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
             IEngineConfiguration engineConfiguration,
             IGlobalAwaiter globalAwaiter,
             ICurrentStateAccessor currentStateAccessor,
-            IPersistentProperties persistentProperties,
-            IRemoteManager remoteManager,
-            IResponsibilities responsibilities)
+            IPersistentStateHandler persistentProperties,
+            IOutboundRequestHandler remoteManager,
+            IResponsibilities responsibilities,
+            ISystemClock systemClock)
         {
             ActivityLogger = activityLogger;
             ClusterConfiguration = clusterConfiguration;
@@ -180,6 +185,7 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
             PersistentState = persistentProperties;
             RemoteManager = remoteManager;
             Responsibilities = responsibilities;
+            SystemClock = systemClock;
         }
 
         private object _lock = new object();
@@ -216,12 +222,12 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
                 CurrentPeers.TryAdd(config.UniqueNodeId, new NodeDetails
                 {
                     NodeConfiguration = config,
-                    LastPinged = DateTimeOffset.UnixEpoch
+                    LastPinged = SystemClock.Epoch()
                 });
             }
         }
 
-        public void HandleConfigurationChange(IEnumerable<INodeConfiguration> newPeerNodeConfigurations)
+        public void UpdateMembership(IEnumerable<INodeConfiguration> newPeerNodeConfigurations)
         {
             var newClusterMemberIds = newPeerNodeConfigurations.ToDictionary(x => x.UniqueNodeId, y => y);
 
@@ -239,18 +245,18 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
                 }
             }
 
-            // If any remaining, which have not been removed yet
+            /// If any remaining, which have not been removed yet
             var serverIdsWhichHaveBeenAdded = newClusterMemberIds;
 
-            // Since we want the Cluster Configuration to change immediately, any AppendEntries actions which might be performing now
-            // will have to check CurrentNodeIds whether they can perform or not
+            /// Since we want the Cluster Configuration to change immediately, any AppendEntries actions which might be performing now
+            /// will have to check CurrentNodeIds whether they can perform or not
 
             foreach (var node in serverIdsWhichHaveBeenAdded)
             {
                 CurrentPeers.TryAdd(node.Key, new NodeDetails
                 {
                     NodeConfiguration = node.Value,
-                    LastPinged = DateTimeOffset.UnixEpoch
+                    LastPinged = SystemClock.Epoch()
                 });
             }
 
@@ -303,7 +309,7 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
             });
         }
 
-        private void SendAppendEntriesToNode(NodeDetails nodeDetails, IChangingState state)
+        private void SendAppendEntriesToNode(NodeDetails nodeDetails, IStateDevelopment state)
         {
             var nodeId = nodeDetails.NodeConfiguration.UniqueNodeId;
 
@@ -324,7 +330,7 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
         }
 
 
-        // Called when an issue occurs
+        /// Called when an issue occurs
         public void IssueRetry(string uniqueNodeId)
         {
             if (CurrentPeers.TryGetValue(uniqueNodeId, out var nodeDetails))
@@ -390,7 +396,7 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
             }
         }
 
-        private void SendSnapshotChunkToNode(NodeDetails nodeDetails, IChangingState state, int offsetToSend)
+        private void SendSnapshotChunkToNode(NodeDetails nodeDetails, IStateDevelopment state, int offsetToSend)
         {
             SnapshotTracker tracker = nodeDetails.SnapshotTracker;
 
@@ -469,14 +475,14 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
             return CurrentPeers.ContainsKey(uniqueNodeId);
         }
 
-        // Called when Node has been communicated with successfully
+        /// Called when Node has been communicated with successfully
         public void UpdateFor(string uniqueNodeId)
         {
             if (CurrentPeers.TryGetValue(uniqueNodeId, out var nodeDetails))
             {
                 MarkNextRequestToBeSent(nodeDetails);
 
-                nodeDetails.LastPinged = DateTimeOffset.UtcNow;
+                nodeDetails.LastPinged = SystemClock.Now();
             }
         }
 

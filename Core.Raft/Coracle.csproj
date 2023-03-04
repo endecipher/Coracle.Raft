@@ -5,11 +5,11 @@
     <OutputType>Library</OutputType>
   </PropertyGroup>
 
-  <ItemGroup>
+  <!--<ItemGroup>
     <Compile Remove="Core\**" />
     <EmbeddedResource Remove="Core\**" />
     <None Remove="Core\**" />
-  </ItemGroup>
+  </ItemGroup>-->
 
   <ItemGroup>
     <InternalsVisibleTo Include="Coracle.IntegrationTests" />
@@ -18,9 +18,5 @@
 
   <ItemGroup>
     <PackageReference Include="TaskGuidance.BackgroundProcessing" Version="1.0.0" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Raft\Engine\Snapshots\" />
   </ItemGroup>
 </Project>

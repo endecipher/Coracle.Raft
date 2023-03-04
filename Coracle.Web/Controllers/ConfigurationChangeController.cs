@@ -1,13 +1,11 @@
-﻿using Coracle.Raft.Engine.Configuration.Cluster;
+﻿using Coracle.Raft.Engine.Configuration.Alterations;
+using Coracle.Web.Client;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Coracle.Web.Controllers
 {
     public class ConfigurationChangeController : Controller
     {
-        public const string ConfigurationChange = nameof(ConfigurationChange);
-        public static string ExternalHandlingEndpoint => ConfigurationChange + "/" + nameof(HandleChange);
-
         public ConfigurationChangeController(ICoracleClient coracleClient)
         {
             CoracleClient = coracleClient;
@@ -24,7 +22,7 @@ namespace Coracle.Web.Controllers
         [HttpPost(Name = nameof(HandleChange))]
         public async Task<string> HandleChange()
         {
-            var command = await HttpContext.Request.ReadFromJsonAsync<ConfigurationChangeRPC>(HttpContext.RequestAborted);
+            var command = await HttpContext.Request.ReadFromJsonAsync<ConfigurationChangeRequest>(HttpContext.RequestAborted);
 
             var result = await CoracleClient.ChangeConfiguration(command, HttpContext.RequestAborted);
 

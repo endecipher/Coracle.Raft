@@ -1,18 +1,11 @@
-﻿using ActivityLogger.Logging;
-using Coracle.IntegrationTests.Components.Discovery;
-using Coracle.IntegrationTests.Components.Logging;
-using Coracle.IntegrationTests.Components.Registries;
-using Coracle.IntegrationTests.Components.Remoting;
-using Coracle.Raft.Engine.Configuration.Cluster;
+﻿using Coracle.IntegrationTests.Components.Helper;
 using Coracle.Raft.Engine.Node;
-using Microsoft.AspNetCore.SignalR;
-using Microsoft.Extensions.Options;
 
 namespace Coracle.IntegrationTests.Components.Node
 {
     public interface ICoracleNodeAccessor
     {
-        ICanoeNode CoracleNode { get; }
+        ICoracleNode CoracleNode { get; }
 
         bool IsInitialized => CoracleNode != null;
     }
@@ -20,9 +13,9 @@ namespace Coracle.IntegrationTests.Components.Node
     public class TestCoracleNodeAccessor : ICoracleNodeAccessor
     {
         private object _lock = new object();
-        private ICanoeNode _node = null;
+        private ICoracleNode _node = null;
 
-        public ICanoeNode CoracleNode
+        public ICoracleNode CoracleNode
         {
 
             get
@@ -44,13 +37,8 @@ namespace Coracle.IntegrationTests.Components.Node
             }
         }
 
-        /// <remarks>
-        /// .NET DI Services and StructureMap jugalbandi
-        /// </remarks>
-        public TestCoracleNodeAccessor(IAppInfo appInfo, IEngineConfiguration engineConfig, ICanoeNode node)
+        public TestCoracleNodeAccessor(IEngineConfiguration engineConfig, ICoracleNode node)
         {
-            (engineConfig as EngineConfigurationSettings).ThisNodeUri = appInfo.GetCurrentAppUri();
-            
             CoracleNode = node;
         }
     }

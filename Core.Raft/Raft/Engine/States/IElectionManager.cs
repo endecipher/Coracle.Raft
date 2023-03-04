@@ -1,4 +1,4 @@
-﻿using Coracle.Raft.Engine.Configuration;
+﻿using Coracle.Raft.Engine.Configuration.Alterations;
 
 namespace Coracle.Raft.Engine.States
 {
@@ -8,9 +8,8 @@ namespace Coracle.Raft.Engine.States
     /// The majority rule ensures that at most one candidate can win the election for a particular term
     /// <see cref="Section 5.2 Leader Election"/>
     /// </remarks>
-    internal interface IElectionManager : IHandleConfigurationChange
+    internal interface IElectionManager : IMembershipUpdate
     {
-        long CurrentTerm { get; }
         void Initiate(long term);
         bool CanSendTowards(string uniqueNodeId, long term);
         void IssueRetry(string uniqueNodeId);
