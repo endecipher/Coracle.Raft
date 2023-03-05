@@ -1,0 +1,42 @@
+name: Coracle.Raft - Project Build and Integration Testing
+
+on:
+  push:
+  pull_request:
+    branches: [ "master" ]
+    paths:
+    - '**.cs'
+    - '**.csproj'
+
+jobs:
+  build:
+    name: build-${{matrix.os}}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Setup .NET Core
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: 6.0.x
+              
+    - name: Build Solution
+      run: dotnet build --configuration Release --output ReleaseBinaries --verbosity normal
+      
+    - name: Workflow Test - Candidacy, Elections, Leader Establishment, Command Handling, Configuration Changes etc
+      run: dotnet test ReleaseBinaries/Coracle.Raft.Tests.dll --logger:"console;verbosity=detailed" --no-build --filter FullyQualifiedName~CandidacyAndLeaderWorkflowTest
+
+    - name: Workflow Test - Follower replication, snapshot installation etc
+      run: dotnet test ReleaseBinaries/Coracle.Raft.Tests.dll --logger:"console;verbosity=detailed" --no-build --filter FullyQualifiedName~FollowerWorkflowTest
+
+    - name: Workflow Test - Configuration Changes involving leader decommission, etc 
+      run: dotnet test ReleaseBinaries/Coracle.Raft.Tests.dll --logger:"console;verbosity=detailed" --no-build --filter FullyQualifiedName~LeaderEjectionWorkflowTest
+
+    - name: Workflow Test - Log Chain Operations, Data manipulations, etc
+      run: dotnet test ReleaseBinaries/Coracle.Raft.Tests.dll --logger:"console;verbosity=detailed" --no-build --filter FullyQualifiedName~LogHolderWorkflowTest
+
+    - name: Workflow Test - Compaction eligibility, Merging of LogEntries and Snapshot creation, etc 
+      run: dotnet test ReleaseBinaries/Coracle.Raft.Tests.dll --logger:"console;verbosity=detailed" --no-build --filter FullyQualifiedName~SnapshotWorkflowTest
