@@ -4,10 +4,20 @@
     <TargetFramework>net6.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>disable</Nullable>
+    <GeneratePackageOnBuild>False</GeneratePackageOnBuild>
+    <Authors>Ayan Choudhury</Authors>
+    <Product>Coracle.Raft.Tests</Product>
+    <Copyright>Copyright © 2023 Ayan Choudhury</Copyright>
+    <RepositoryUrl>https://github.com/endecipher/Coracle.Raft</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="EntityMonitoring.FluentAssertions" Version="1.0.0" />
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="EntityMonitoring.FluentAssertions" Version="1.0.*" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="6.0.3" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.1.0" />
     <PackageReference Include="xunit" Version="2.4.1" />

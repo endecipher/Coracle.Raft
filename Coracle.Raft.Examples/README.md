@@ -2,8 +2,6 @@
 
 *Clusterize* your functionality and build your own replicated state machine using this completely extensible implementation of the Raft consensus algorithm in .NET.  
 
-[![NuGet version (TaskGuidance.BackgroundProcessing)](https://img.shields.io/nuget/v/TaskGuidance.BackgroundProcessing.svg?style=flat-square)](https://www.nuget.org/packages/TaskGuidance.BackgroundProcessing/)
-
 ## Features
 
 - Control important functionality

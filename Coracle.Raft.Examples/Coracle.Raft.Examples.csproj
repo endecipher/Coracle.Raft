@@ -1,4 +1,19 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <GeneratePackageOnBuild>False</GeneratePackageOnBuild>
+    <Authors>Ayan Choudhury</Authors>
+    <Product>Coracle.Raft.Examples</Product>
+    <Copyright>Copyright © 2023 Ayan Choudhury</Copyright>
+    <RepositoryUrl>https://github.com/endecipher/Coracle.Raft</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
