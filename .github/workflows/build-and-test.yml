@@ -28,7 +28,7 @@ jobs:
       run: dotnet build --configuration Release --verbosity normal
       
     - name: Workflow Test - Candidacy, Elections, Leader Establishment, Command Handling, Configuration Changes etc
-      run: dotnet test Coracle.Raft.Tests.dll --logger trx --results-directory "CommonTestResults-${{ matrix.os }}" --no-build --filter FullyQualifiedName~CandidacyAndLeaderWorkflowTest
+      run: dotnet test --logger trx --results-directory "CommonTestResults-${{ matrix.os }}" --filter FullyQualifiedName~CandidacyAndLeaderWorkflowTest
 
     - name: Upload test results
       uses: actions/upload-artifact@v3
