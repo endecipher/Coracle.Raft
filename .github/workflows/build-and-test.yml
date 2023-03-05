@@ -25,10 +25,10 @@ jobs:
         dotnet-version: 6.0.x
               
     - name: Build Solution
-      run: dotnet build --configuration Release --output ReleaseBinaries --verbosity normal
+      run: dotnet build --configuration Release --verbosity normal
       
     - name: Workflow Test - Candidacy, Elections, Leader Establishment, Command Handling, Configuration Changes etc
-      run: dotnet test ReleaseBinaries/Coracle.Raft.Tests.dll --logger trx --results-directory "CommonTestResults-${{ matrix.os }}" --no-build --filter FullyQualifiedName~CandidacyAndLeaderWorkflowTest
+      run: dotnet test Coracle.Raft.Tests.dll --logger trx --results-directory "CommonTestResults-${{ matrix.os }}" --no-build --filter FullyQualifiedName~CandidacyAndLeaderWorkflowTest
 
     - name: Upload test results
       uses: actions/upload-artifact@v3
