@@ -1,6 +1,6 @@
 ﻿using Coracle.Raft.Engine.Configuration.Cluster;
 
-namespace Coracle.Samples.Registrar
+namespace Coracle.Raft.Examples.Registrar
 {
     /// <summary>
     /// Can be used by <see cref="INodeRegistrar"/> to maintain registry of nodes

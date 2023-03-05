@@ -1,4 +1,4 @@
-﻿namespace Coracle.Samples.ClientHandling
+﻿namespace Coracle.Raft.Examples.ClientHandling
 {
     public interface INoteStorage
     {

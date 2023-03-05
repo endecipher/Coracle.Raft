@@ -1,4 +1,4 @@
-﻿namespace Coracle.IntegrationTests.Components.Helper
+﻿namespace Coracle.Raft.Tests.Components.Helper
 {
     public class AwaitedLock
     {

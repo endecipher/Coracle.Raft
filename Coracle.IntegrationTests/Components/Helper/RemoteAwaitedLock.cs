@@ -1,7 +1,7 @@
 ﻿using System.Collections.Concurrent;
 
 
-namespace Coracle.IntegrationTests.Components.Helper
+namespace Coracle.Raft.Tests.Components.Helper
 {
     /// <summary>
     /// Ok, so the thing is, there will be parallel requests from TestRemoteManager for each MockNode.

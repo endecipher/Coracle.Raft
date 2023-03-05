@@ -1,10 +1,10 @@
 ﻿using System.Collections.Concurrent;
 using System.Text;
 using ActivityLogger.Logging;
-using Coracle.Samples.Logging;
+using Coracle.Raft.Examples.Logging;
 using Newtonsoft.Json;
 
-namespace Coracle.Samples.ClientHandling
+namespace Coracle.Raft.Examples.ClientHandling
 {
     public class NoteStorage : INoteStorage
     {

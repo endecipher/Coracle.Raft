@@ -1,11 +1,11 @@
 ﻿using ActivityLogger.Logging;
-using Coracle.IntegrationTests.Framework;
 using Coracle.Raft.Engine.Configuration.Cluster;
 using Coracle.Raft.Engine.Remoting;
 using Coracle.Raft.Engine.Remoting.RPC;
-using Coracle.Samples.Logging;
+using Coracle.Raft.Tests.Framework;
+using Coracle.Raft.Examples.Logging;
 
-namespace Coracle.IntegrationTests.Components.Remoting
+namespace Coracle.Raft.Tests.Components.Remoting
 {
     public class TestOutboundRequestHandler : IOutboundRequestHandler
     {
@@ -67,7 +67,7 @@ namespace Coracle.IntegrationTests.Components.Remoting
 
             var (response, exception) = NodeContext.GetMockNode(configuration.UniqueNodeId).RequestVoteLock.WaitUntilResponse(callObject);
 
-            if (exception != null) 
+            if (exception != null)
                 throw exception;
 
             var operationResult = new RemoteCallResult<IRequestVoteRPCResponse>()

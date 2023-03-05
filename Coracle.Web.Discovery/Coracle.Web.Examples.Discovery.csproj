@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Coracle.Samples\Coracle.Samples.csproj" />
+    <ProjectReference Include="..\Coracle.Samples\Coracle.Raft.Examples.csproj" />
   </ItemGroup>
 
 </Project>

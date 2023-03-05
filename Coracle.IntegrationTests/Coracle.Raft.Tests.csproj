@@ -7,10 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="Components\Logging\ImplActivity.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="EntityMonitoring.FluentAssertions" Version="1.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="6.0.3" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.1.0" />
@@ -22,7 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Coracle.Samples\Coracle.Samples.csproj" />
+    <ProjectReference Include="..\Coracle.Samples\Coracle.Raft.Examples.csproj" />
   </ItemGroup>
 
   <ItemGroup>

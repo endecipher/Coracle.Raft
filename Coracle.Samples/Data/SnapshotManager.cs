@@ -6,9 +6,9 @@ using Newtonsoft.Json;
 using System.Text;
 using Coracle.Raft.Engine.Snapshots;
 using Coracle.Raft.Engine.Command;
-using Coracle.Samples.ClientHandling;
+using Coracle.Raft.Examples.ClientHandling;
 
-namespace Coracle.Samples.Data
+namespace Coracle.Raft.Examples.Data
 {
     public class SnapshotManager : ISnapshotManager
     {

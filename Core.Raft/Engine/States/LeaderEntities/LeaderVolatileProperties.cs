@@ -10,15 +10,7 @@ using Coracle.Raft.Engine.Snapshots;
 
 namespace Coracle.Raft.Engine.States.LeaderEntities
 {
-    /// <summary>
-    /// Volatile state on leaders. 
-    /// Reinitialized after election.
-    /// 
-    /// nextIndex[] for each server, index of the next log entry to send to that server (initialized to leader last log index + 1)
-    /// matchIndex[] for each server, index of highest log entry known to be replicated on server (initialized to 0, increases monotonically)
-    /// <see cref="Figure 2 State"/>
-    /// </summary>
-    internal class LeaderVolatileProperties : ILeaderVolatileProperties
+    public class LeaderVolatileActivityConstants
     {
         #region Constants
 
@@ -47,6 +39,19 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
         public const string nodesToRemove = nameof(nodesToRemove);
 
         #endregion
+    }
+
+    /// <summary>
+    /// Volatile state on leaders. 
+    /// Reinitialized after election.
+    /// 
+    /// nextIndex[] for each server, index of the next log entry to send to that server (initialized to leader last log index + 1)
+    /// matchIndex[] for each server, index of highest log entry known to be replicated on server (initialized to 0, increases monotonically)
+    /// <see cref="Figure 2 State"/>
+    /// </summary>
+    internal class LeaderVolatileProperties : ILeaderVolatileProperties
+    {
+        
 
         IActivityLogger ActivityLogger { get; }
         IClusterConfiguration ClusterConfiguration { get; }
@@ -119,12 +124,12 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
 
             ActivityLogger?.Log(new CoracleActivity
             {
-                EntitySubject = Entity,
-                Event = Initializing,
+                EntitySubject = LeaderVolatileActivityConstants.Entity,
+                Event = LeaderVolatileActivityConstants.Initializing,
                 Level = ActivityLogLevel.Debug,
 
             }
-            .With(ActivityParam.New(lastPersistedIndex, lastIndex))
+            .With(ActivityParam.New(LeaderVolatileActivityConstants.lastPersistedIndex, lastIndex))
             .WithCallerInfo());
 
             Indices = new ConcurrentDictionary<string, ServerIndices>();
@@ -192,16 +197,16 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
 
                 ActivityLogger?.Log(new CoracleActivity
                 {
-                    EntitySubject = Entity,
-                    Event = DecrementedNextIndexToFirstIndexOfPriorValidTerm,
+                    EntitySubject = LeaderVolatileActivityConstants.Entity,
+                    Event = LeaderVolatileActivityConstants.DecrementedNextIndexToFirstIndexOfPriorValidTerm,
                     Level = ActivityLogLevel.Debug,
 
                 }
-                .With(ActivityParam.New(nodeId, externalServerId))
-                .With(ActivityParam.New(LeaderVolatileProperties.currentNextIndex, currentNextIndex))
-                .With(ActivityParam.New(newNextIndex, firstIndexOfPriorValidTerm.Value))
-                .With(ActivityParam.New(conflictTermOfFollower, followerConflictTerm))
-                .With(ActivityParam.New(firstIndexOfConflictingTerm, followerFirstIndexOfConflictingTerm))
+                .With(ActivityParam.New(LeaderVolatileActivityConstants.nodeId, externalServerId))
+                .With(ActivityParam.New(LeaderVolatileActivityConstants.currentNextIndex, currentNextIndex))
+                .With(ActivityParam.New(LeaderVolatileActivityConstants.newNextIndex, firstIndexOfPriorValidTerm.Value))
+                .With(ActivityParam.New(LeaderVolatileActivityConstants.conflictTermOfFollower, followerConflictTerm))
+                .With(ActivityParam.New(LeaderVolatileActivityConstants.firstIndexOfConflictingTerm, followerFirstIndexOfConflictingTerm))
                 .WithCallerInfo());
             }
             else
@@ -219,14 +224,14 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
                     ActivityLogger?.Log(new CoracleActivity
                     {
                         Description = $"Log[firstIndexConflictTerm{followerFirstIndexOfConflictingTerm}].Term equals follower Conflict Term {followerConflictTerm}",
-                        EntitySubject = Entity,
-                        Event = DecrementedNextIndexToFirstIndexOfConflictingTerm,
+                        EntitySubject = LeaderVolatileActivityConstants.Entity,
+                        Event = LeaderVolatileActivityConstants.DecrementedNextIndexToFirstIndexOfConflictingTerm,
                         Level = ActivityLogLevel.Debug,
 
                     }
-                    .With(ActivityParam.New(nodeId, externalServerId))
-                    .With(ActivityParam.New(conflictTermOfFollower, followerConflictTerm))
-                    .With(ActivityParam.New(newNextIndex, followerFirstIndexOfConflictingTerm))
+                    .With(ActivityParam.New(LeaderVolatileActivityConstants.nodeId, externalServerId))
+                    .With(ActivityParam.New(LeaderVolatileActivityConstants.conflictTermOfFollower, followerConflictTerm))
+                    .With(ActivityParam.New(LeaderVolatileActivityConstants.newNextIndex, followerFirstIndexOfConflictingTerm))
                     .WithCallerInfo());
                 }
                 else
@@ -239,15 +244,15 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
 
                     ActivityLogger?.Log(new CoracleActivity
                     {
-                        EntitySubject = Entity,
-                        Event = DecrementedNextIndexToFirstIndexOfLeaderTermCorrespondingToConflictingIndexEntry,
+                        EntitySubject = LeaderVolatileActivityConstants.Entity,
+                        Event = LeaderVolatileActivityConstants.DecrementedNextIndexToFirstIndexOfLeaderTermCorrespondingToConflictingIndexEntry,
                         Level = ActivityLogLevel.Debug,
                     }
-                    .With(ActivityParam.New(nodeId, externalServerId))
-                    .With(ActivityParam.New(LeaderVolatileProperties.currentNextIndex, currentNextIndex))
-                    .With(ActivityParam.New(newNextIndex, firstIndexOfleaderTermOfConflictingIndexEntry.Value))
-                    .With(ActivityParam.New(conflictTermOfFollower, followerConflictTerm))
-                    .With(ActivityParam.New(firstIndexOfConflictingTerm, followerFirstIndexOfConflictingTerm))
+                    .With(ActivityParam.New(LeaderVolatileActivityConstants.nodeId, externalServerId))
+                    .With(ActivityParam.New(LeaderVolatileActivityConstants.currentNextIndex, currentNextIndex))
+                    .With(ActivityParam.New(LeaderVolatileActivityConstants.newNextIndex, firstIndexOfleaderTermOfConflictingIndexEntry.Value))
+                    .With(ActivityParam.New(LeaderVolatileActivityConstants.conflictTermOfFollower, followerConflictTerm))
+                    .With(ActivityParam.New(LeaderVolatileActivityConstants.firstIndexOfConflictingTerm, followerFirstIndexOfConflictingTerm))
                     .WithCallerInfo());
                 }
             }
@@ -271,13 +276,13 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
 
             ActivityLogger?.Log(new CoracleActivity
             {
-                EntitySubject = Entity,
-                Event = DecrementedNextIndex,
+                EntitySubject = LeaderVolatileActivityConstants.Entity,
+                Event = LeaderVolatileActivityConstants.DecrementedNextIndex,
                 Level = ActivityLogLevel.Debug,
             }
-            .With(ActivityParam.New(nodeId, externalServerId))
-            .With(ActivityParam.New(LeaderVolatileProperties.currentNextIndex, currentNextIndex))
-            .With(ActivityParam.New(LeaderVolatileProperties.newNextIndex, newNextIndex))
+            .With(ActivityParam.New(LeaderVolatileActivityConstants.nodeId, externalServerId))
+            .With(ActivityParam.New(LeaderVolatileActivityConstants.currentNextIndex, currentNextIndex))
+            .With(ActivityParam.New(LeaderVolatileActivityConstants.newNextIndex, newNextIndex))
             .WithCallerInfo());
         }
 
@@ -298,14 +303,14 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
 
             ActivityLogger?.Log(new CoracleActivity
             {
-                EntitySubject = Entity,
-                Event = UpdatedIndices,
+                EntitySubject = LeaderVolatileActivityConstants.Entity,
+                Event = LeaderVolatileActivityConstants.UpdatedIndices,
                 Level = ActivityLogLevel.Debug,
 
             }
-            .With(ActivityParam.New(nodeId, externalServerId))
-            .With(ActivityParam.New(newMatchIndex, maxIndexReplicated))
-            .With(ActivityParam.New(newNextIndex, nextIndexToMark))
+            .With(ActivityParam.New(LeaderVolatileActivityConstants.nodeId, externalServerId))
+            .With(ActivityParam.New(LeaderVolatileActivityConstants.newMatchIndex, maxIndexReplicated))
+            .With(ActivityParam.New(LeaderVolatileActivityConstants.newNextIndex, nextIndexToMark))
             .WithCallerInfo());
         }
 
@@ -320,14 +325,14 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
 
             ActivityLogger?.Log(new CoracleActivity
             {
-                EntitySubject = Entity,
-                Event = MatchIndexUpdateForMajority,
+                EntitySubject = LeaderVolatileActivityConstants.Entity,
+                Event = LeaderVolatileActivityConstants.MatchIndexUpdateForMajority,
                 Level = ActivityLogLevel.Debug,
 
             }
-            .With(ActivityParam.New(indexToCheck, index))
-            .With(ActivityParam.New(peerNodesWhichHaveReplicated, peerNodeCountWhoHaveReplicatedGivenIndex))
-            .With(ActivityParam.New(totalNodesInCluster, totalNodes))
+            .With(ActivityParam.New(LeaderVolatileActivityConstants.indexToCheck, index))
+            .With(ActivityParam.New(LeaderVolatileActivityConstants.peerNodesWhichHaveReplicated, peerNodeCountWhoHaveReplicatedGivenIndex))
+            .With(ActivityParam.New(LeaderVolatileActivityConstants.totalNodesInCluster, totalNodes))
             .WithCallerInfo());
 
             /// Check for Majority
@@ -377,12 +382,12 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
 
             ActivityLogger?.Log(new CoracleActivity
             {
-                EntitySubject = Entity,
-                Event = NewConfigurationManagement,
+                EntitySubject = LeaderVolatileActivityConstants.Entity,
+                Event = LeaderVolatileActivityConstants.NewConfigurationManagement,
                 Level = ActivityLogLevel.Debug,
             }
-            .With(ActivityParam.New(nodesToRemove, serverIdsWhichHaveBeenRemoved))
-            .With(ActivityParam.New(nodesToAdd, serverIdsWhichHaveBeenAdded))
+            .With(ActivityParam.New(LeaderVolatileActivityConstants.nodesToRemove, serverIdsWhichHaveBeenRemoved))
+            .With(ActivityParam.New(LeaderVolatileActivityConstants.nodesToAdd, serverIdsWhichHaveBeenAdded))
             .WithCallerInfo());
         }
 

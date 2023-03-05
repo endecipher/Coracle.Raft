@@ -1,8 +1,8 @@
 ﻿using Coracle.Raft.Engine.Configuration.Cluster;
 using Coracle.Raft.Engine.Logs;
 using Coracle.Raft.Engine.Remoting.RPC;
-using Coracle.Samples.ClientHandling;
-using Coracle.Samples.Data;
+using Coracle.Raft.Examples.ClientHandling;
+using Coracle.Raft.Examples.Data;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 

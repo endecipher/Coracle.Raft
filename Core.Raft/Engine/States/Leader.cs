@@ -31,7 +31,7 @@ namespace Coracle.Raft.Engine.States
         public const string NodeId = nameof(NodeId);
         public const string IsFromCommand = nameof(IsFromCommand);
         public const string SessionId = nameof(SessionId);
-        public new const string Entity = nameof(Leader);
+        public const string Entity = nameof(Leader);
         #endregion
 
         public Leader() : base() { StateValue = StateValues.Leader; }

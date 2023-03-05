@@ -1,8 +1,8 @@
 ﻿using ActivityLogger.Logging;
 using Coracle.Raft.Engine.Configuration.Cluster;
 using Coracle.Raft.Engine.Discovery;
-using Coracle.Samples.Logging;
-using Coracle.Samples.Registrar;
+using Coracle.Raft.Examples.Registrar;
+using Coracle.Raft.Examples.Logging;
 
 namespace Coracle.Web.Discovery.Coracle.Registrar
 {

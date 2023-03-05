@@ -1,10 +1,10 @@
 ﻿using ActivityLogger.Logging;
 using Coracle.Raft.Engine.Configuration.Cluster;
 using Coracle.Raft.Engine.Discovery;
-using Coracle.Samples.Logging;
-using Coracle.Samples.Registrar;
+using Coracle.Raft.Examples.Registrar;
+using Coracle.Raft.Examples.Logging;
 
-namespace Coracle.IntegrationTests.Components.Discovery
+namespace Coracle.Raft.Tests.Components.Discovery
 {
     public class TestNodeRegistrar : INodeRegistrar
     {
@@ -20,7 +20,7 @@ namespace Coracle.IntegrationTests.Components.Discovery
 
         #endregion
 
-        public TestNodeRegistrar(INodeRegistry nodeRegistry, IActivityLogger activityLogger) 
+        public TestNodeRegistrar(INodeRegistry nodeRegistry, IActivityLogger activityLogger)
         {
             NodeRegistry = nodeRegistry;
             ActivityLogger = activityLogger;

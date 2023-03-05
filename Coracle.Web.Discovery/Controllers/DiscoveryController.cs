@@ -1,6 +1,6 @@
 ﻿using Coracle.Raft.Engine.Configuration.Cluster;
 using Coracle.Raft.Engine.Discovery;
-using Coracle.Samples.Registrar;
+using Coracle.Raft.Examples.Registrar;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Coracle.Web.Discovery.Controllers

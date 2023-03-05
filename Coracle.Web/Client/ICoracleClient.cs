@@ -1,5 +1,5 @@
 ﻿using Coracle.Raft.Engine.Configuration.Alterations;
-using Coracle.Samples.ClientHandling;
+using Coracle.Raft.Examples.ClientHandling;
 
 namespace Coracle.Web.Client
 {

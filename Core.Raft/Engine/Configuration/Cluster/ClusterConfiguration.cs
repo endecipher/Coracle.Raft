@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace Coracle.Raft.Engine.Configuration.Cluster
 {
-    internal sealed class ClusterConfiguration : IClusterConfiguration
+    public class ActivityConstants
     {
         #region Constants
 
@@ -16,7 +16,10 @@ namespace Coracle.Raft.Engine.Configuration.Cluster
         public const string allNodeIds = nameof(allNodeIds);
 
         #endregion
+    }
 
+    internal sealed class ClusterConfiguration : IClusterConfiguration
+    {
         object _lock = new object();
 
         public ClusterConfiguration(IActivityLogger activityLogger)
@@ -81,8 +84,8 @@ namespace Coracle.Raft.Engine.Configuration.Cluster
             {
                 ActivityLogger?.Log(new CoracleActivity
                 {
-                    EntitySubject = Entity,
-                    Event = CurrentNodeNotPartOfCluster,
+                    EntitySubject = ActivityConstants.Entity,
+                    Event = ActivityConstants.CurrentNodeNotPartOfCluster,
                     Level = ActivityLogLevel.Debug
                 }
                 .WithCallerInfo());
@@ -96,11 +99,11 @@ namespace Coracle.Raft.Engine.Configuration.Cluster
 
             ActivityLogger?.Log(new CoracleActivity
             {
-                EntitySubject = Entity,
-                Event = NewUpdate,
+                EntitySubject = ActivityConstants.Entity,
+                Event = ActivityConstants.NewUpdate,
                 Level = ActivityLogLevel.Debug
             }
-            .With(ActivityParam.New(allNodeIds, CurrentConfiguration.Select(_ => _.UniqueNodeId).ToArray()))
+            .With(ActivityParam.New(ActivityConstants.allNodeIds, CurrentConfiguration.Select(_ => _.UniqueNodeId).ToArray()))
             .WithCallerInfo());
         }
     }

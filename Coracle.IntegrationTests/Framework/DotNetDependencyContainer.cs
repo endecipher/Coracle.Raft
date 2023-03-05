@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using TaskGuidance.BackgroundProcessing.Dependencies;
 
-namespace Coracle.IntegrationTests.Framework
+namespace Coracle.Raft.Tests.Framework
 {
     public class DotNetDependencyContainer : IDependencyContainer
     {

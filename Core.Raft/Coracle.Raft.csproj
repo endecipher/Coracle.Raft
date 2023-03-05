@@ -5,15 +5,8 @@
     <OutputType>Library</OutputType>
   </PropertyGroup>
 
-  <!--<ItemGroup>
-    <Compile Remove="Core\**" />
-    <EmbeddedResource Remove="Core\**" />
-    <None Remove="Core\**" />
-  </ItemGroup>-->
-
   <ItemGroup>
-    <InternalsVisibleTo Include="Coracle.IntegrationTests" />
-    <InternalsVisibleTo Include="Coracle.Web" />
+    <InternalsVisibleTo Include="Coracle.Raft.Tests" />
   </ItemGroup>
 
   <ItemGroup>

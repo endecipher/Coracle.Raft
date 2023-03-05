@@ -1,7 +1,7 @@
 ﻿using ActivityLogger.Logging;
 using Coracle.Raft.Engine.Remoting;
 using Coracle.Raft.Engine.Remoting.RPC;
-using Coracle.Samples.Logging;
+using Coracle.Raft.Examples.Logging;
 using Coracle.Web.Impl.Node;
 using Coracle.Web.Impl.Remoting.Deserialization;
 using Microsoft.AspNetCore.Mvc;

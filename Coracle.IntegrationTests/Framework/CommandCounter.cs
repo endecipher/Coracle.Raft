@@ -1,4 +1,4 @@
-﻿namespace Coracle.IntegrationTests.Framework
+﻿namespace Coracle.Raft.Tests.Framework
 {
     public interface ICommandCounter
     {

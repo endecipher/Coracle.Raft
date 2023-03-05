@@ -1,8 +1,8 @@
-﻿using Coracle.IntegrationTests.Components.Helper;
-using Coracle.Raft.Engine.Helper;
+﻿using Coracle.Raft.Engine.Helper;
+using Coracle.Raft.Tests.Components.Helper;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Coracle.IntegrationTests.Framework
+namespace Coracle.Raft.Tests.Framework
 {
     public class TestContext
     {
@@ -21,7 +21,7 @@ namespace Coracle.IntegrationTests.Framework
 
             ServiceContainer.ServiceDescriptors.AddSingleton<IMockNodeContext, MockNodeContext>();
             ServiceContainer.ServiceDescriptors.AddSingleton<ICommandCounter, CommandCounter>();
-            
+
             ServiceContainer.Build();
         }
 

@@ -1,9 +1,9 @@
-﻿using Coracle.IntegrationTests.Components.Helper;
-using Coracle.Raft.Engine.Configuration.Cluster;
+﻿using Coracle.Raft.Engine.Configuration.Cluster;
 using Coracle.Raft.Engine.Remoting.RPC;
+using Coracle.Raft.Tests.Components.Helper;
 using System.Collections.Concurrent;
 
-namespace Coracle.IntegrationTests.Framework
+namespace Coracle.Raft.Tests.Framework
 {
     public interface IMockNodeContext
     {

@@ -1,8 +1,8 @@
 ﻿using Coracle.Raft.Engine.Configuration.Cluster;
-using Coracle.Samples.Registrar;
+using Coracle.Raft.Examples.Registrar;
 using System.Collections.Concurrent;
 
-namespace Coracle.IntegrationTests.Components.Discovery
+namespace Coracle.Raft.Tests.Components.Discovery
 {
     public class TestNodeRegistry : INodeRegistry
     {

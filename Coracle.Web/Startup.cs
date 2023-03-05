@@ -7,7 +7,6 @@ using TaskGuidance.BackgroundProcessing.Core;
 using ActivityLogger.Logging;
 using CorrelationId.Abstractions;
 using Coracle.Raft.Engine.Discovery;
-using Coracle.Samples.ClientHandling;
 using Coracle.Web.Impl.Logging;
 using Coracle.Web.Impl.Discovery;
 using Coracle.Web.Impl.Node;
@@ -15,9 +14,10 @@ using Coracle.Web.Impl.Remoting;
 using TaskGuidance.BackgroundProcessing.Dependencies;
 using Coracle.Raft.Engine.Node;
 using Coracle.Raft.Engine.Command;
-using Coracle.Samples.Data;
 using Coracle.Web.Client;
 using static Coracle.Web.Constants;
+using Coracle.Raft.Examples.ClientHandling;
+using Coracle.Raft.Examples.Data;
 
 namespace Coracle.Web
 {

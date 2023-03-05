@@ -1,12 +1,12 @@
 ﻿using Coracle.Raft.Engine.Configuration.Cluster;
 using Coracle.Raft.Engine.Discovery;
-using Coracle.Samples.Registrar;
+using Coracle.Raft.Examples.Registrar;
 
-namespace Coracle.IntegrationTests.Components.Discovery
+namespace Coracle.Raft.Tests.Components.Discovery
 {
     public class TestDiscoveryHandler : IDiscoveryHandler
     {
-        public TestDiscoveryHandler(INodeRegistrar nodeRegistrar) 
+        public TestDiscoveryHandler(INodeRegistrar nodeRegistrar)
         {
             NodeRegistrar = nodeRegistrar;
         }

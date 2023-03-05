@@ -3,16 +3,20 @@ using Coracle.Raft.Engine.ActivityLogger;
 
 namespace Coracle.Raft.Engine.States
 {
+    namespace Current
+    {
+        public class CurrentAcessorActivityConstants
+        {
+            #region Constants
+            public const string Entity = nameof(CurrentStateAccessor);
+            public const string StateChange = nameof(StateChange);
+            public const string newState = nameof(newState);
+            #endregion
+        }
+    }
+
     internal class CurrentStateAccessor : ICurrentStateAccessor
     {
-        #region Constants
-
-        public const string Entity = nameof(CurrentStateAccessor);
-        public const string StateChange = nameof(StateChange);
-        public const string newState = nameof(newState);
-
-        #endregion
-
         public IActivityLogger ActivityLogger { get; }
 
         public CurrentStateAccessor(IActivityLogger activityLogger)
@@ -39,12 +43,12 @@ namespace Coracle.Raft.Engine.States
                 ActivityLogger?.Log(new CoracleActivity
                 {
                     Description = $"State changed to {value.StateValue}",
-                    EntitySubject = Entity,
-                    Event = StateChange,
+                    EntitySubject = Current.CurrentAcessorActivityConstants.Entity,
+                    Event = Current.CurrentAcessorActivityConstants.StateChange,
                     Level = ActivityLogLevel.Debug,
 
                 }
-                .With(ActivityParam.New(newState, value.StateValue.ToString()))
+                .With(ActivityParam.New(Current.CurrentAcessorActivityConstants.newState, value.StateValue.ToString()))
                 .WithCallerInfo());
             }
         }
@@ -67,5 +71,4 @@ namespace Coracle.Raft.Engine.States
 
         #endregion
     }
-
 }

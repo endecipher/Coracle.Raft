@@ -2,7 +2,7 @@
 using Coracle.Raft.Engine.Configuration.Cluster;
 using Coracle.Raft.Engine.Snapshots;
 
-namespace Coracle.Samples.Data
+namespace Coracle.Raft.Examples.Data
 {
     public interface ISnapshotManager
     {

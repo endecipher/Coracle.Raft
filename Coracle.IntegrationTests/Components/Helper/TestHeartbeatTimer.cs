@@ -1,7 +1,7 @@
 ﻿using Coracle.Raft.Engine.Helper;
 using Coracle.Raft.Engine.Node;
 
-namespace Coracle.IntegrationTests.Components.Helper
+namespace Coracle.Raft.Tests.Components.Helper
 {
     internal class TestHeartbeatTimer : IHeartbeatTimer
     {

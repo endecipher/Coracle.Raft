@@ -2,10 +2,10 @@
 using Coracle.Raft.Engine.Command;
 using Coracle.Raft.Engine.Node;
 using Coracle.Raft.Engine.Snapshots;
-using Coracle.Samples.Data;
-using Coracle.Samples.Logging;
+using Coracle.Raft.Examples.Data;
+using Coracle.Raft.Examples.Logging;
 
-namespace Coracle.Samples.ClientHandling
+namespace Coracle.Raft.Examples.ClientHandling
 {
     public class NoteKeeperStateMachineHandler : IStateMachineHandler
     {

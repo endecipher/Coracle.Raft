@@ -28,7 +28,7 @@ namespace Coracle.Raft.Engine.States
         ILeaderNodePronouncer LeaderNodePronouncer { get; set; }
     }
 
-    internal abstract class AbstractState : IStateDevelopment, IStateDependencies, IMembershipUpdate
+    public class AbstractStateActivityConstants
     {
         #region Constants
 
@@ -50,7 +50,10 @@ namespace Coracle.Raft.Engine.States
         public const string newState = nameof(newState);
 
         #endregion
+    }
 
+    internal abstract class AbstractState : IStateDevelopment, IStateDependencies, IMembershipUpdate
+    {
         public IActivityLogger ActivityLogger { get; set; }
         public ILeaderNodePronouncer LeaderNodePronouncer { get; set; }
         public IPersistentStateHandler PersistentState { get; set; }
@@ -96,13 +99,13 @@ namespace Coracle.Raft.Engine.States
             ActivityLogger?.Log(new CoracleActivity
             {
                 Description = $"Updating Commit Index from {VolatileState.CommitIndex} to {indexToAssignAsCommitIndex}",
-                EntitySubject = Entity,
-                Event = UpdatingCommitIndex,
+                EntitySubject = AbstractStateActivityConstants.Entity,
+                Event = AbstractStateActivityConstants.UpdatingCommitIndex,
                 Level = ActivityLogLevel.Debug,
 
             }
-            .With(ActivityParam.New(oldCommitIndex, VolatileState.CommitIndex))
-            .With(ActivityParam.New(newCommitIndex, indexToAssignAsCommitIndex))
+            .With(ActivityParam.New(AbstractStateActivityConstants.oldCommitIndex, VolatileState.CommitIndex))
+            .With(ActivityParam.New(AbstractStateActivityConstants.newCommitIndex, indexToAssignAsCommitIndex))
             .WithCallerInfo());
 
             if (indexToAssignAsCommitIndex <= VolatileState.CommitIndex)
@@ -110,13 +113,13 @@ namespace Coracle.Raft.Engine.States
                 ActivityLogger?.Log(new CoracleActivity
                 {
                     Description = $"New Commit Index cannot be lesser than/equal to the old one",
-                    EntitySubject = Entity,
-                    Event = ApplyingLogEntry,
+                    EntitySubject = AbstractStateActivityConstants.Entity,
+                    Event = AbstractStateActivityConstants.ApplyingLogEntry,
                     Level = ActivityLogLevel.Error,
 
                 }
-                .With(ActivityParam.New(newCommitIndex, indexToAssignAsCommitIndex))
-                .With(ActivityParam.New(oldCommitIndex, VolatileState.CommitIndex))
+                .With(ActivityParam.New(AbstractStateActivityConstants.newCommitIndex, indexToAssignAsCommitIndex))
+                .With(ActivityParam.New(AbstractStateActivityConstants.oldCommitIndex, VolatileState.CommitIndex))
                 .WithCallerInfo());
 
                 return;
@@ -142,14 +145,14 @@ namespace Coracle.Raft.Engine.States
                         ActivityLogger?.Log(new CoracleActivity
                         {
                             Description = $"Updating Commit Index from {VolatileState.CommitIndex} to {indexToAssignAsCommitIndex}",
-                            EntitySubject = Entity,
-                            Event = CommitGreatherThanLastApplied,
+                            EntitySubject = AbstractStateActivityConstants.Entity,
+                            Event = AbstractStateActivityConstants.CommitGreatherThanLastApplied,
                             Level = ActivityLogLevel.Debug,
 
                         }
-                        .With(ActivityParam.New(commitIndex, VolatileState.CommitIndex))
-                        .With(ActivityParam.New(lastApplied, VolatileState.LastApplied))
-                        .With(ActivityParam.New(newCommitIndex, indexToAssignAsCommitIndex))
+                        .With(ActivityParam.New(AbstractStateActivityConstants.commitIndex, VolatileState.CommitIndex))
+                        .With(ActivityParam.New(AbstractStateActivityConstants.lastApplied, VolatileState.LastApplied))
+                        .With(ActivityParam.New(AbstractStateActivityConstants.newCommitIndex, indexToAssignAsCommitIndex))
                         .WithCallerInfo());
 
                         VolatileState.LastApplied++;
@@ -159,12 +162,12 @@ namespace Coracle.Raft.Engine.States
                         ActivityLogger?.Log(new CoracleActivity
                         {
                             Description = $"Applying Log Entry {entryToApply}",
-                            EntitySubject = Entity,
-                            Event = ApplyingLogEntry,
+                            EntitySubject = AbstractStateActivityConstants.Entity,
+                            Event = AbstractStateActivityConstants.ApplyingLogEntry,
                             Level = ActivityLogLevel.Debug,
 
                         }
-                        .With(ActivityParam.New(LogEntry, entryToApply))
+                        .With(ActivityParam.New(AbstractStateActivityConstants.LogEntry, entryToApply))
                         .WithCallerInfo());
 
                         if (entryToApply == null || !entryToApply.Type.HasFlag(Logs.LogEntry.Types.Command))
@@ -179,13 +182,13 @@ namespace Coracle.Raft.Engine.States
                         ActivityLogger?.Log(new CoracleActivity
                         {
                             Description = $"Caught during State Machine application for Commit Index {indexToAssignAsCommitIndex}",
-                            EntitySubject = Entity,
-                            Event = ApplyingLogEntry,
+                            EntitySubject = AbstractStateActivityConstants.Entity,
+                            Event = AbstractStateActivityConstants.ApplyingLogEntry,
                             Level = ActivityLogLevel.Error,
 
                         }
-                        .With(ActivityParam.New(exception, ex))
-                        .With(ActivityParam.New(newCommitIndex, indexToAssignAsCommitIndex))
+                        .With(ActivityParam.New(AbstractStateActivityConstants.exception, ex))
+                        .With(ActivityParam.New(AbstractStateActivityConstants.newCommitIndex, indexToAssignAsCommitIndex))
                         .WithCallerInfo());
                     }
                 }
@@ -215,8 +218,8 @@ namespace Coracle.Raft.Engine.States
         {
             ActivityLogger?.Log(new CoracleActivity
             {
-                EntitySubject = Entity,
-                Event = AbandoningState,
+                EntitySubject = AbstractStateActivityConstants.Entity,
+                Event = AbstractStateActivityConstants.AbandoningState,
                 Level = ActivityLogLevel.Debug,
 
             }
@@ -235,8 +238,8 @@ namespace Coracle.Raft.Engine.States
 
             ActivityLogger?.Log(new CoracleActivity
             {
-                EntitySubject = Entity,
-                Event = InitializingOnStateChange,
+                EntitySubject = AbstractStateActivityConstants.Entity,
+                Event = AbstractStateActivityConstants.InitializingOnStateChange,
                 Level = ActivityLogLevel.Debug,
 
             }
@@ -292,11 +295,11 @@ namespace Coracle.Raft.Engine.States
 
             ActivityLogger?.Log(new CoracleActivity
             {
-                EntitySubject = Entity,
-                Event = Stopping,
+                EntitySubject = AbstractStateActivityConstants.Entity,
+                Event = AbstractStateActivityConstants.Stopping,
                 Level = ActivityLogLevel.Debug,
             }
-            .With(ActivityParam.New(newState, StateValue.ToString()))
+            .With(ActivityParam.New(AbstractStateActivityConstants.newState, StateValue.ToString()))
             .WithCallerInfo());
         }
 
@@ -311,11 +314,11 @@ namespace Coracle.Raft.Engine.States
 
             ActivityLogger?.Log(new CoracleActivity
             {
-                EntitySubject = Entity,
-                Event = Resuming,
+                EntitySubject = AbstractStateActivityConstants.Entity,
+                Event = AbstractStateActivityConstants.Resuming,
                 Level = ActivityLogLevel.Debug,
             }
-            .With(ActivityParam.New(newState, StateValue.ToString()))
+            .With(ActivityParam.New(AbstractStateActivityConstants.newState, StateValue.ToString()))
             .WithCallerInfo());
         }
 
@@ -333,11 +336,11 @@ namespace Coracle.Raft.Engine.States
 
             ActivityLogger?.Log(new CoracleActivity
             {
-                EntitySubject = Entity,
-                Event = Decommissioning,
+                EntitySubject = AbstractStateActivityConstants.Entity,
+                Event = AbstractStateActivityConstants.Decommissioning,
                 Level = ActivityLogLevel.Debug,
             }
-            .With(ActivityParam.New(newState, StateValue.ToString()))
+            .With(ActivityParam.New(AbstractStateActivityConstants.newState, StateValue.ToString()))
             .WithCallerInfo());
         }
 

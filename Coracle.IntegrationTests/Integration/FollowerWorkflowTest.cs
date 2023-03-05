@@ -8,11 +8,11 @@ using EntityMonitoring.FluentAssertions.Structure;
 using FluentAssertions;
 using Xunit;
 using Coracle.Raft.Engine.Logs;
-using Coracle.Samples.Data;
-using Coracle.Samples.ClientHandling;
-using Coracle.IntegrationTests.Framework;
+using Coracle.Raft.Examples.ClientHandling;
+using Coracle.Raft.Tests.Framework;
+using Coracle.Raft.Examples.Data;
 
-namespace Coracle.IntegrationTests.Tests
+namespace Coracle.Raft.Tests.Integration
 {
     /// <summary>
     /// Tests a follower node's abilities:
@@ -24,7 +24,7 @@ namespace Coracle.IntegrationTests.Tests
     /// <item>AppendEntriesRPC to sync entries post snapshot installation</item>
     /// </list>
     /// </summary>
-    [TestCaseOrderer($"Coracle.IntegrationTests.Framework.{nameof(ExecutionOrderer)}", $"Coracle.IntegrationTests")]
+    [TestCaseOrderer($"Coracle.Raft.Tests.Framework.{nameof(ExecutionOrderer)}", $"Coracle.Raft.Tests")]
     public class FollowerWorkflowTest : BaseTest, IClassFixture<TestContext>
     {
         public FollowerWorkflowTest(TestContext context) : base(context)
@@ -616,7 +616,7 @@ namespace Coracle.IntegrationTests.Tests
                 .RemoveOnceMatched();
 
             var commitIndexUpdated = queue
-                .AttachNotifier(_ => _.Is(AbstractState.Entity, AbstractState.ApplyingLogEntry))
+                .AttachNotifier(_ => _.Is(AbstractStateActivityConstants.Entity, AbstractStateActivityConstants.ApplyingLogEntry))
                 .RemoveOnceMatched();
 
             var lastCommandCounter = Context.CommandContext.GetLatestCommandCounter;
@@ -917,7 +917,7 @@ namespace Coracle.IntegrationTests.Tests
                 .RemoveOnceMatched();
 
             var commitIndexUpdated = queue
-                .AttachNotifier(_ => _.Is(AbstractState.Entity, AbstractState.ApplyingLogEntry))
+                .AttachNotifier(_ => _.Is(AbstractStateActivityConstants.Entity, AbstractStateActivityConstants.ApplyingLogEntry))
                 .RemoveOnceMatched();
 
             var followerLogEntriesBeforeRPC = await GetAllLogEntries();

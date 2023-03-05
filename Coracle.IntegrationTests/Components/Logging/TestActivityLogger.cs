@@ -1,7 +1,7 @@
 ﻿using ActivityLogger.Logging;
 using EntityMonitoring.FluentAssertions.Structure;
 
-namespace Coracle.IntegrationTests.Components.Logging
+namespace Coracle.Raft.Tests.Components.Logging
 {
     public class TestActivityLogger : IActivityLogger
     {

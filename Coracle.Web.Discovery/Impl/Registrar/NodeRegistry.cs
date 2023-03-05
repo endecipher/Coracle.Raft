@@ -1,5 +1,5 @@
 ﻿using Coracle.Raft.Engine.Configuration.Cluster;
-using Coracle.Samples.Registrar;
+using Coracle.Raft.Examples.Registrar;
 using System.Collections.Concurrent;
 
 namespace Coracle.Web.Discovery.Coracle.Registrar

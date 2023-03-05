@@ -3,10 +3,7 @@ using Coracle.Web.Hubs;
 using ActivityLogger.Logging;
 using CorrelationId.Abstractions;
 using Newtonsoft.Json;
-using Coracle.Raft.Engine.States.LeaderEntities;
-using Coracle.Raft.Engine.States;
-using Coracle.Raft.Engine.Configuration.Cluster;
-using Coracle.Samples.Data;
+using Coracle.Raft.Examples.Data;
 
 namespace Coracle.Web.Impl.Logging
 {
@@ -104,37 +101,37 @@ namespace Coracle.Web.Impl.Logging
                     }
                     break;
 
-                case VolatileProperties.Entity:
+                case Raft.Engine.States.Volatile.ActivityConstants.Entity:
                     {
                         list.Add(new CoracleProperty
                         {
                             Prop = CoracleProperty.Property.CommitIndex,
-                            Value = e.Parameters.First(_ => _.Name.Equals(VolatileProperties.commitIndex)).Value
+                            Value = e.Parameters.First(_ => _.Name.Equals(Raft.Engine.States.Volatile.ActivityConstants.commitIndex)).Value
                         });
 
                         list.Add(new CoracleProperty
                         {
                             Prop = CoracleProperty.Property.LastApplied,
-                            Value = e.Parameters.First(_ => _.Name.Equals(VolatileProperties.lastApplied)).Value
+                            Value = e.Parameters.First(_ => _.Name.Equals(Raft.Engine.States.Volatile.ActivityConstants.lastApplied)).Value
                         });
                     }
                     break;
 
-                case LeaderVolatileProperties.Entity:
+                case Raft.Engine.States.LeaderEntities.LeaderVolatileActivityConstants.Entity:
                     {
                         var eventColl = new HashSet<string>
                         {
-                            LeaderVolatileProperties.DecrementedNextIndex,
-                            LeaderVolatileProperties.DecrementedNextIndexToFirstIndexOfConflictingTerm,
-                            LeaderVolatileProperties.DecrementedNextIndexToFirstIndexOfLeaderTermCorrespondingToConflictingIndexEntry,
-                            LeaderVolatileProperties.DecrementedNextIndexToFirstIndexOfPriorValidTerm,
-                            LeaderVolatileProperties.UpdatedIndices
+                            Raft.Engine.States.LeaderEntities.LeaderVolatileActivityConstants.DecrementedNextIndex,
+                            Raft.Engine.States.LeaderEntities.LeaderVolatileActivityConstants.DecrementedNextIndexToFirstIndexOfConflictingTerm,
+                            Raft.Engine.States.LeaderEntities.LeaderVolatileActivityConstants.DecrementedNextIndexToFirstIndexOfLeaderTermCorrespondingToConflictingIndexEntry,
+                            Raft.Engine.States.LeaderEntities.LeaderVolatileActivityConstants.DecrementedNextIndexToFirstIndexOfPriorValidTerm,
+                            Raft.Engine.States.LeaderEntities.LeaderVolatileActivityConstants.UpdatedIndices
                         };
 
                         if (eventColl.Contains(e.Event))
                         {
-                            string nodeId = e.Parameters.First(_ => _.Name.Equals(LeaderVolatileProperties.nodeId)).Value;
-                            string newNextIndex = e.Parameters.First(_ => _.Name.Equals(LeaderVolatileProperties.newNextIndex)).Value;
+                            string nodeId = e.Parameters.First(_ => _.Name.Equals(Raft.Engine.States.LeaderEntities.LeaderVolatileActivityConstants.nodeId)).Value;
+                            string newNextIndex = e.Parameters.First(_ => _.Name.Equals(Raft.Engine.States.LeaderEntities.LeaderVolatileActivityConstants.newNextIndex)).Value;
 
                             list.Add(new CoracleProperty
                             {
@@ -143,10 +140,10 @@ namespace Coracle.Web.Impl.Logging
                             });
                         }
 
-                        if (e.Event.Equals(LeaderVolatileProperties.UpdatedIndices))
+                        if (e.Event.Equals(Raft.Engine.States.LeaderEntities.LeaderVolatileActivityConstants.UpdatedIndices))
                         {
-                            string nodeId = e.Parameters.First(_ => _.Name.Equals(LeaderVolatileProperties.nodeId)).Value;
-                            string newMatchIndex = e.Parameters.First(_ => _.Name.Equals(LeaderVolatileProperties.newMatchIndex)).Value;
+                            string nodeId = e.Parameters.First(_ => _.Name.Equals(Raft.Engine.States.LeaderEntities.LeaderVolatileActivityConstants.nodeId)).Value;
+                            string newMatchIndex = e.Parameters.First(_ => _.Name.Equals(Raft.Engine.States.LeaderEntities.LeaderVolatileActivityConstants.newMatchIndex)).Value;
 
                             list.Add(new CoracleProperty
                             {
@@ -157,37 +154,37 @@ namespace Coracle.Web.Impl.Logging
                     }
                     break;
 
-                case CurrentStateAccessor.Entity:
+                case Raft.Engine.States.Current.CurrentAcessorActivityConstants.Entity:
                     {
                         list.Add(new CoracleProperty
                         {
                             Prop = CoracleProperty.Property.State,
-                            Value = e.Parameters.First(_ => _.Name.Equals(CurrentStateAccessor.newState)).Value
+                            Value = e.Parameters.First(_ => _.Name.Equals(Raft.Engine.States.Current.CurrentAcessorActivityConstants.newState)).Value
                         });
                     }
                     break;
 
-                case AbstractState.Entity:
+                case Raft.Engine.States.AbstractStateActivityConstants.Entity:
                     {
-                        if (e.Event.Equals(AbstractState.Stopping) || e.Event.Equals(AbstractState.Resuming) || e.Event.Equals(AbstractState.Decommissioning))
+                        if (e.Event.Equals(Raft.Engine.States.AbstractStateActivityConstants.Stopping) || e.Event.Equals(Raft.Engine.States.AbstractStateActivityConstants.Resuming) || e.Event.Equals(Raft.Engine.States.AbstractStateActivityConstants.Decommissioning))
                         {
                             list.Add(new CoracleProperty
                             {
                                 Prop = CoracleProperty.Property.State,
-                                Value = e.Parameters.First(_ => _.Name.Equals(AbstractState.newState)).Value
+                                Value = e.Parameters.First(_ => _.Name.Equals(Raft.Engine.States.AbstractStateActivityConstants.newState)).Value
                             });
                         }
                     }
                     break;
 
-                case ClusterConfiguration.Entity:
+                case Raft.Engine.Configuration.Cluster.ActivityConstants.Entity:
                     {
-                        if (e.Event.Equals(ClusterConfiguration.NewUpdate))
+                        if (e.Event.Equals(Raft.Engine.Configuration.Cluster.ActivityConstants.NewUpdate))
                         {
                             list.Add(new CoracleProperty
                             {
                                 Prop = CoracleProperty.Property.Cluster,
-                                Value = e.Parameters.First(_ => _.Name.Equals(ClusterConfiguration.allNodeIds)).Value
+                                Value = e.Parameters.First(_ => _.Name.Equals(Raft.Engine.Configuration.Cluster.ActivityConstants.allNodeIds)).Value
                             });
                         }
                     }

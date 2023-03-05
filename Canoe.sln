@@ -3,19 +3,15 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.1.32210.238
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Canoe", "Canoe\Canoe.csproj", "{74233121-D631-44FB-A60B-F7ABD8CAFB52}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Coracle.Raft", "Core.Raft\Coracle.Raft.csproj", "{D46C6C36-1112-492A-8E5B-277BB8B1AE34}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Coracle", "Core.Raft\Coracle.csproj", "{D46C6C36-1112-492A-8E5B-277BB8B1AE34}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Coracle.Raft.Tests", "Coracle.IntegrationTests\Coracle.Raft.Tests.csproj", "{CD986B31-F907-4495-91F3-B57144503CC2}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Raft.Web", "Raft.Web\Raft.Web.csproj", "{D16EBFD1-61C9-43A0-80B3-7D2BC43A39F3}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Coracle.Web.Examples", "Coracle.Web\Coracle.Web.Examples.csproj", "{5B9FC350-63AE-4877-9FD8-5C782E96D813}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Coracle.IntegrationTests", "Coracle.IntegrationTests\Coracle.IntegrationTests.csproj", "{CD986B31-F907-4495-91F3-B57144503CC2}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Coracle.Web.Examples.Discovery", "Coracle.Web.Discovery\Coracle.Web.Examples.Discovery.csproj", "{34BCBBAF-A396-4C56-9475-C5F1AFE1D01C}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Coracle.Web", "Coracle.Web\Coracle.Web.csproj", "{5B9FC350-63AE-4877-9FD8-5C782E96D813}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Coracle.Web.Discovery", "Coracle.Web.Discovery\Coracle.Web.Discovery.csproj", "{34BCBBAF-A396-4C56-9475-C5F1AFE1D01C}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Coracle.Samples", "Coracle.Samples\Coracle.Samples.csproj", "{F4A6DD26-2082-4752-B620-6729B195594B}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Coracle.Raft.Examples", "Coracle.Samples\Coracle.Raft.Examples.csproj", "{F4A6DD26-2082-4752-B620-6729B195594B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -23,18 +19,10 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{74233121-D631-44FB-A60B-F7ABD8CAFB52}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{74233121-D631-44FB-A60B-F7ABD8CAFB52}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{74233121-D631-44FB-A60B-F7ABD8CAFB52}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{74233121-D631-44FB-A60B-F7ABD8CAFB52}.Release|Any CPU.Build.0 = Release|Any CPU
 		{D46C6C36-1112-492A-8E5B-277BB8B1AE34}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{D46C6C36-1112-492A-8E5B-277BB8B1AE34}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D46C6C36-1112-492A-8E5B-277BB8B1AE34}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D46C6C36-1112-492A-8E5B-277BB8B1AE34}.Release|Any CPU.Build.0 = Release|Any CPU
-		{D16EBFD1-61C9-43A0-80B3-7D2BC43A39F3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{D16EBFD1-61C9-43A0-80B3-7D2BC43A39F3}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{D16EBFD1-61C9-43A0-80B3-7D2BC43A39F3}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{D16EBFD1-61C9-43A0-80B3-7D2BC43A39F3}.Release|Any CPU.Build.0 = Release|Any CPU
 		{CD986B31-F907-4495-91F3-B57144503CC2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{CD986B31-F907-4495-91F3-B57144503CC2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{CD986B31-F907-4495-91F3-B57144503CC2}.Release|Any CPU.ActiveCfg = Release|Any CPU

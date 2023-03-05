@@ -1,7 +1,7 @@
 ﻿using Xunit.Abstractions;
 using Xunit.Sdk;
 
-namespace Coracle.IntegrationTests.Framework
+namespace Coracle.Raft.Tests.Framework
 {
     public class ExecutionOrderer : ITestCaseOrderer
     {
@@ -27,7 +27,7 @@ namespace Coracle.IntegrationTests.Framework
                     testCase
                         .TestMethod
                         .Method
-                        .GetCustomAttributes((typeof(OrderAttribute).AssemblyQualifiedName))
+                        .GetCustomAttributes(typeof(OrderAttribute).AssemblyQualifiedName)
                         .FirstOrDefault()
                         .GetNamedArgument<int>(nameof(OrderAttribute.Value));
 

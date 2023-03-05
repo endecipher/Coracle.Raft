@@ -1,5 +1,5 @@
 using ActivityLogger.Logging;
-using Coracle.Samples.Registrar;
+using Coracle.Raft.Examples.Registrar;
 using Coracle.Web.Discovery.Coracle.Logging;
 using Coracle.Web.Discovery.Coracle.Registrar;
 

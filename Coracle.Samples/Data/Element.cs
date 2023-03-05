@@ -1,6 +1,6 @@
 ﻿using Coracle.Raft.Engine.Logs;
 
-namespace Coracle.Samples.Data
+namespace Coracle.Raft.Examples.Data
 {
     public class Element
     {

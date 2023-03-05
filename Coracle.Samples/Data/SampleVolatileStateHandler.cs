@@ -1,7 +1,6 @@
 ﻿using ActivityLogger.Logging;
 using ActivityLogLevel = ActivityLogger.Logging.ActivityLogLevel;
 using Coracle.Raft.Engine.States;
-using Coracle.Samples.Logging;
 using Coracle.Raft.Engine.Logs;
 using Coracle.Raft.Engine.Configuration.Cluster;
 using Newtonsoft.Json;
@@ -9,8 +8,9 @@ using System.Text;
 using Coracle.Raft.Engine.Node;
 using Coracle.Raft.Engine.Snapshots;
 using Coracle.Raft.Engine.Command;
+using Coracle.Raft.Examples.Logging;
 
-namespace Coracle.Samples.Data
+namespace Coracle.Raft.Examples.Data
 {
     public class SampleVolatileStateHandler : IPersistentStateHandler
     {

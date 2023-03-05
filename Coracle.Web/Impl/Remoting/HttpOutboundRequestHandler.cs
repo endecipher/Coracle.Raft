@@ -2,8 +2,7 @@
 using Coracle.Raft.Engine.Configuration.Cluster;
 using Coracle.Raft.Engine.Remoting;
 using Coracle.Raft.Engine.Remoting.RPC;
-using Coracle.Samples.Logging;
-using Coracle.Web.Controllers;
+using Coracle.Raft.Examples.Logging;
 
 namespace Coracle.Web.Impl.Remoting
 {

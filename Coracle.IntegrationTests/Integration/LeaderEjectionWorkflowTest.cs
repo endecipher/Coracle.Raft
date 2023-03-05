@@ -6,29 +6,22 @@ using Coracle.Raft.Engine.States;
 using EntityMonitoring.FluentAssertions.Structure;
 using FluentAssertions;
 using Xunit;
+using Coracle.Raft.Engine.Remoting.RPC;
 using Coracle.Raft.Engine.Configuration.Alterations;
-using Coracle.Raft.Engine.Node;
-using Coracle.Raft.Engine.Snapshots;
 using Coracle.Raft.Engine.Command;
-using Coracle.Samples.ClientHandling;
-using Coracle.Samples.Data;
-using Coracle.IntegrationTests.Framework;
-using Coracle.IntegrationTests.Components.Helper;
+using Coracle.Raft.Examples.ClientHandling;
+using Coracle.Raft.Tests.Framework;
+using Coracle.Raft.Tests.Components.Helper;
 
-namespace Coracle.IntegrationTests.Tests
+namespace Coracle.Raft.Tests.Integration
 {
     /// <summary>
-    /// Tests the snapshot workflow, which comprises of:
-    /// <list type="number">
-    /// <item>Eligibility of Compaction</item>
-    /// <item>Compaction Process</item>
-    /// <item>InstallSnapshotRPC and successful transfer of the committed snapshot details to a newly joined node of the cluster</item>
-    /// </list>
+    /// Tests configuration change requests which doesn't include the leader node as of that point
     /// </summary>
-    [TestCaseOrderer($"Coracle.IntegrationTests.Framework.{nameof(ExecutionOrderer)}", $"Coracle.IntegrationTests")]
-    public class SnapshotWorkflowTest : BaseTest, IClassFixture<TestContext>
+    [TestCaseOrderer($"Coracle.Raft.Tests.Framework.{nameof(ExecutionOrderer)}", $"Coracle.Raft.Tests")]
+    public class LeaderEjectionWorkflowTest : BaseTest, IClassFixture<TestContext>
     {
-        public SnapshotWorkflowTest(TestContext context) : base(context)
+        public LeaderEjectionWorkflowTest(TestContext context) : base(context)
         {
         }
 
@@ -36,7 +29,7 @@ namespace Coracle.IntegrationTests.Tests
         [Order(1)]
         public async Task IsTurningToLeader()
         {
-            //Arrange
+            #region Arrange
             Context.GetService<IActivityMonitor<Activity>>().Start();
 
             var notifiableQueue = CaptureActivities();
@@ -50,11 +43,14 @@ namespace Coracle.IntegrationTests.Tests
 
             var commitIndexUpdated = notifiableQueue
                 .AttachNotifier(x =>
-                    x.Is(AbstractState.Entity, AbstractState.ApplyingLogEntry));
+                    x.Is(AbstractStateActivityConstants.Entity, AbstractStateActivityConstants.ApplyingLogEntry));
 
             StateCapture captureAfterCommand = null;
 
-            //Act
+            #endregion
+
+            #region Act
+
             try
             {
                 InitializeEngineConfiguration();
@@ -106,6 +102,8 @@ namespace Coracle.IntegrationTests.Tests
                 caughtException = e;
             }
 
+            #endregion
+
             #region Assertions
 
             var assertableQueue = StartAssertions(notifiableQueue);
@@ -150,124 +148,25 @@ namespace Coracle.IntegrationTests.Tests
             #endregion
         }
 
-
         [Fact]
         [Order(2)]
-        public async Task IsLeaderCommitingMultipleCommandEntriesAndInitiatingCompaction()
-        {
-            #region Arrange
-
-            var notifiableQueue = CaptureActivities();
-
-            var commitIndexUpdated = notifiableQueue
-                .AttachNotifier(x =>
-                    x.Is(AbstractState.Entity, AbstractState.ApplyingLogEntry));
-
-            var snapshotBuilt = notifiableQueue
-                .AttachNotifier(x =>
-                    x.Is(OnCompaction.ActionName, OnCompaction.LogCompacted)).RemoveOnceMatched();
-
-            #endregion
-
-            #region Act
-
-            Exception caughtException = null;
-            CommandExecutionResult clientHandlingResult = null;
-
-            StateCapture captureAfterCommands = null;
-            var threshold = Context.GetService<IEngineConfiguration>().SnapshotThresholdSize;
-
-            var lastIndex = await Context.GetService<IPersistentStateHandler>().GetLastIndex();
-
-            (bool HasSnapshot, ISnapshotHeader Detail) info = (false, null);
-
-            var nextIndexToStart = lastIndex + 1;
-
-            try
-            {
-                // Add new commands until threshold surpasses
-                for (int i = (int)nextIndexToStart; i <= threshold + 1; i++)
-                {
-                    var (Command, Note) = TestAddCommand();
-
-                    EnqueueAppendEntriesSuccessResponse(MockNodeA);
-                    EnqueueAppendEntriesSuccessResponse(MockNodeB);
-
-                    clientHandlingResult = await Context.GetService<ICommandExecutor>()
-                        .Execute(Command, CancellationToken.None);
-
-                    commitIndexUpdated.Wait(EventNotificationTimeOut);
-
-                    if (!commitIndexUpdated.IsConditionMatched)
-                        break;
-                }
-
-                captureAfterCommands = new StateCapture(Context.GetService<ICurrentStateAccessor>().Get());
-
-                snapshotBuilt.Wait(EventNotificationTimeOut);
-
-                info = await (Context.GetService<IPersistentStateHandler>() as SampleVolatileStateHandler).HasCommittedSnapshot(lastIndex);
-
-
-            }
-            catch (Exception e)
-            {
-                caughtException = e;
-            }
-
-            #endregion
-
-            #region Assert
-
-            var assertableQueue = StartAssertions(notifiableQueue);
-
-            caughtException
-                .Should().Be(null, $" ");
-
-            captureAfterCommands
-                .CommitIndex
-                .Should().Be(threshold + 1, "The commit Index should be 6, as the comands have been replicated to other nodes");
-
-            snapshotBuilt.IsConditionMatched.Should().BeTrue();
-
-            info.HasSnapshot.Should().BeTrue();
-
-            info.Detail.LastIncludedTerm.Should().Be(captureAfterCommands.CurrentTerm, "Term should be the same, as it has not changed");
-
-            info.Detail.LastIncludedIndex.Should().Be(threshold, "The snapshot should encompass the appropriate index");
-
-            (await Context.GetService<IPersistentStateHandler>().FetchLogEntryIndexPreviousToIndex(info.Detail.LastIncludedIndex))
-                .Should()
-                .Be(0, "As the Snapshot shohuld be the second log entry in the log chain, and sit next to the None entry from initialization");
-
-            Cleanup();
-            #endregion
-        }
-
-
-        [Fact]
-        [Order(3)]
         public async Task IsLeaderHandlingConfigurationChangeAndSendingSnapshot()
         {
             #region Arrange
 
             var notifiableQueue = CaptureActivities();
 
-            var commitIndexUpdated = notifiableQueue
-                .AttachNotifier(x =>
-                    x.Is(AbstractState.Entity, AbstractState.ApplyingLogEntry)).RemoveOnceMatched();
-
             var configurationChanged = notifiableQueue
                 .AttachNotifier(x =>
                     x.Is(OnConfigurationChangeRequestReceive.ActionName, OnConfigurationChangeRequestReceive.ConfigurationChangeSuccessful)).RemoveOnceMatched();
 
-            var successfulInstallation = notifiableQueue
-                .AttachNotifier(x =>
-                    x.Is(OnSendInstallSnapshotChunkRPC.ActionName, OnSendInstallSnapshotChunkRPC.Successful)).RemoveOnceMatched();
-
             var nodesCaughtUp = notifiableQueue
                 .AttachNotifier(x =>
                     x.Is(OnCatchUpOfNewlyAddedNodes.ActionName, OnCatchUpOfNewlyAddedNodes.NodesCaughtUp)).RemoveOnceMatched();
+
+            var decommissioning = notifiableQueue
+                .AttachNotifier(x =>
+                    x.Is(AbstractStateActivityConstants.Entity, AbstractStateActivityConstants.Decommissioning)).RemoveOnceMatched();
 
             var currentConfiguration = Context.GetService<IClusterConfiguration>().CurrentConfiguration;
 
@@ -279,16 +178,10 @@ namespace Coracle.IntegrationTests.Tests
             {
                 UniqueNodeId = MockNewNodeC //Adding NewNodeC
 
-            }).Where(x => !x.UniqueNodeId.Equals(MockNodeB)) //Removing MockNodeIdB
+            }).Where(x => !x.UniqueNodeId.Equals(SUT)) //Removing SUT (Which is leader)
             .ToList();
 
             CreateMockNode(MockNewNodeC);
-
-            var snapshotDetail = await Context.GetService<IPersistentStateHandler>().GetCommittedSnapshot();
-
-            var file = await Context.GetService<ISnapshotManager>().GetFile(snapshotDetail);
-
-            int lastOffset = await file.GetLastOffset();
 
             #endregion
 
@@ -296,10 +189,12 @@ namespace Coracle.IntegrationTests.Tests
 
             Exception caughtException = null;
             ConfigurationChangeResult changeResult = null;
-            StateCapture captureAfterConfigurationChange = null;
+            StateCapture captureBeforeConfigurationChange = null, captureAfterConfigurationChange = null, captureAfterDecommission = null;
 
             try
             {
+                captureBeforeConfigurationChange = new StateCapture(Context.GetService<ICurrentStateAccessor>().Get());
+
                 /// <remarks>
                 /// Enqueuing Responses for old nodes
                 /// </remarks>
@@ -312,14 +207,14 @@ namespace Coracle.IntegrationTests.Tests
                 EnqueueAppendEntriesSuccessResponse(MockNodeA); //For any heartbeats being sent for the C-new entry to be replicated and then applying cluster configuration
                 EnqueueAppendEntriesSuccessResponse(MockNodeB); //For any heartbeats being sent for the C-new entry to be replicated and then applying cluster configuration
 
-                /// <remarks>
-                /// Enqueueing responses for the new node
-                /// </remarks>
-
-                for (int i = 0; i <= lastOffset; i++)
+                // New Node may respond with Success false, as it has just started up and needs replication
+                Context.NodeContext.GetMockNode(MockNewNodeC).EnqueueNextAppendEntriesResponse(rpc => new AppendEntriesRPCResponse
                 {
-                    EnqueueInstallSnapshotSuccessResponse(MockNewNodeC); //Enqueue Success Responses for each SnapshotChunkRPC
-                }
+                    Term = rpc.Term,
+                    FirstIndexOfConflictingEntryTermOnFailure = rpc.PreviousLogIndex,
+                    ConflictingEntryTermOnFailure = rpc.PreviousLogTerm,
+                    Success = false
+                }, approveImmediately: true);
 
                 EnqueueAppendEntriesSuccessResponse(MockNewNodeC); //Enqueue Success AppendEntries for the remaining entries
                 EnqueueAppendEntriesSuccessResponse(MockNewNodeC); //For any heartbeats being sent for the C-new entry to be replicated and then applying cluster configuration
@@ -331,13 +226,15 @@ namespace Coracle.IntegrationTests.Tests
 
                 }, CancellationToken.None);
 
-                successfulInstallation.Wait(EventNotificationTimeOut);
-
                 nodesCaughtUp.Wait(EventNotificationTimeOut);
 
                 configurationChanged.Wait(EventNotificationTimeOut);
 
                 captureAfterConfigurationChange = new StateCapture(Context.GetService<ICurrentStateAccessor>().Get());
+
+                decommissioning.Wait(EventNotificationTimeOut);
+
+                captureAfterDecommission = new StateCapture(Context.GetService<ICurrentStateAccessor>().Get());
             }
             catch (Exception e)
             {
@@ -353,32 +250,49 @@ namespace Coracle.IntegrationTests.Tests
             caughtException
                 .Should().Be(null, $" ");
 
-            Context.NodeContext.GetMockNode(MockNewNodeC).InstallSnapshotLock.RemoteCalls.Count
-                .Should().Be(lastOffset + 1, "As, if the last offset is 1, then there should be 2 calls (one for 0 offset and one for 1 offset)");
+            captureBeforeConfigurationChange
+                .StateValue
+                .Should().Be(StateValues.Leader, "As the leader state is has Leader value");
 
             var lastIndex = await Context.GetService<IPersistentStateHandler>().GetLastIndex();
 
             captureAfterConfigurationChange
+                .StateValue
+                .Should().Be(StateValues.Leader, "Since the leader doesn't decommission immediately after appending the C-new entry, the state is still Leader");
+
+            captureAfterConfigurationChange
+                .LastLogIndex
+                .Should().Be(lastIndex, "As the C-new entry must have been appended to the logs");
+
+            captureAfterConfigurationChange
                 .CommitIndex
-                .Should().Be(lastIndex, "The conf entry should have been replicated to other nodes and also comitted");
+                .Should().Be(lastIndex - 1, "C-new entry is present in the logs, however, the replication to other nodes has not yet happened yet, and therefore, the commit index would point to the C-old,new entry being committed");
 
-            captureAfterConfigurationChange
+            captureAfterDecommission
+                .CommitIndex
+                .Should().Be(lastIndex, "The conf C-new entry should have been replicated to other nodes and also comitted");
+
+            captureAfterDecommission
                 .LastApplied
-                .Should().Be(lastIndex, "The conf entry should have been replicated to other nodes and also comitted");
+                .Should().Be(lastIndex, "The conf C-new entry should have been replicated to other nodes and also comitted");
 
-            captureAfterConfigurationChange
+            captureAfterDecommission
                 .MatchIndexes
                 .Values
                 .Should()
                 .Match((i) => i.All(_ => _.Equals(lastIndex)),
-                    $"{MockNodeA} and {MockNodeB} should have had replicated all entries up until the leader's last log index");
+                    $"{MockNodeA} and {MockNodeB} and {MockNewNodeC} should have had replicated all entries up until the leader's last log index");
 
-            captureAfterConfigurationChange
+            captureAfterDecommission
                 .NextIndexes
                 .Values
                 .Should()
                 .Match((i) => i.All(_ => _.Equals(lastIndex + 1)),
-                    $"{MockNodeA} and {MockNodeB} should have had replicated all entries up until the leader's last log index, and the nextIndex to send for each peer mock node should be one greater");
+                    $"{MockNodeA} and {MockNodeB} and {MockNewNodeC} should have had replicated all entries up until the leader's last log index, and the nextIndex to send for each peer mock node should be one greater");
+
+            captureAfterDecommission
+                .StateValue
+                .Should().Be(StateValues.Abandoned, "As the leader state is now decommissioned");
 
             Cleanup();
             #endregion

@@ -11,16 +11,21 @@ namespace Coracle.Raft.Engine.States
         void OnSuccessfulSnapshotInstallation(ISnapshotHeader snapshot);
     }
 
+    namespace Volatile 
+    {
+        public class ActivityConstants
+        {
+            #region Constants
+            public const string commitIndex = nameof(commitIndex);
+            public const string lastApplied = nameof(lastApplied);
+            public const string Entity = nameof(VolatileProperties);
+            public const string VolatileChange = nameof(VolatileChange);
+            #endregion
+        }
+    }
+
     internal class VolatileProperties : IVolatileProperties
     {
-        #region Constants
-        public const string commitIndex = nameof(commitIndex);
-        public const string lastApplied = nameof(lastApplied);
-        public const string Entity = nameof(VolatileProperties);
-        public const string VolatileChange = nameof(VolatileChange);
-
-        #endregion
-
         public VolatileProperties(IActivityLogger activityLogger)
         {
             ActivityLogger = activityLogger;
@@ -67,12 +72,12 @@ namespace Coracle.Raft.Engine.States
         {
             ActivityLogger?.Log(new CoracleActivity
             {
-                EntitySubject = Entity,
-                Event = VolatileChange,
+                EntitySubject = Volatile.ActivityConstants.Entity,
+                Event = Volatile.ActivityConstants.VolatileChange,
                 Level = ActivityLogLevel.Debug
             }
-            .With(ActivityParam.New(lastApplied, _lastApplied))
-            .With(ActivityParam.New(commitIndex, _commitIndex))
+            .With(ActivityParam.New(Volatile.ActivityConstants.lastApplied, _lastApplied))
+            .With(ActivityParam.New(Volatile.ActivityConstants.commitIndex, _commitIndex))
             .WithCallerInfo());
         }
 

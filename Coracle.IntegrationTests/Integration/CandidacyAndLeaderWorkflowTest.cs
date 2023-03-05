@@ -1,5 +1,4 @@
 ﻿using ActivityLogger.Logging;
-using Coracle.IntegrationTests.Components.Remoting;
 using Coracle.Raft.Engine.Actions.Core;
 using Coracle.Raft.Engine.Configuration.Cluster;
 using Coracle.Raft.Engine.Discovery;
@@ -17,12 +16,13 @@ using Xunit;
 using Coracle.Raft.Engine.Configuration.Alterations;
 using Coracle.Raft.Engine.Actions;
 using Coracle.Raft.Engine.Command;
-using Coracle.Samples.ClientHandling;
-using Coracle.Samples.Data;
-using Coracle.IntegrationTests.Components.Helper;
-using Coracle.IntegrationTests.Framework;
+using Coracle.Raft.Examples.Data;
+using Coracle.Raft.Examples.ClientHandling;
+using Coracle.Raft.Tests.Framework;
+using Coracle.Raft.Tests.Components.Helper;
+using Coracle.Raft.Tests.Components.Remoting;
 
-namespace Coracle.IntegrationTests.Tests
+namespace Coracle.Raft.Tests.Integration
 {
 
     /// <summary>
@@ -37,7 +37,7 @@ namespace Coracle.IntegrationTests.Tests
     /// <item>Follower establishment on receiving greater term RPC</item>
     /// </list>
     /// </summary>
-    [TestCaseOrderer($"Coracle.IntegrationTests.Framework.{nameof(ExecutionOrderer)}", $"Coracle.IntegrationTests")]
+    [TestCaseOrderer($"Coracle.Raft.Tests.Framework.{nameof(ExecutionOrderer)}", $"Coracle.Raft.Tests")]
     public class CandidacyAndLeaderWorkflowTest : BaseTest, IClassFixture<TestContext>
     {
         public CandidacyAndLeaderWorkflowTest(TestContext context) : base(context)
@@ -304,8 +304,8 @@ namespace Coracle.IntegrationTests.Tests
 
             var candidateEstablished = notifiableQueue
                 .AttachNotifier(x =>
-                    x.Is(CurrentStateAccessor.Entity, CurrentStateAccessor.StateChange)
-                        && x.Has(CurrentStateAccessor.newState, nameof(StateValues.Candidate))).RemoveOnceMatched();
+                    x.Is(Engine.States.Current.CurrentAcessorActivityConstants.Entity, Engine.States.Current.CurrentAcessorActivityConstants.StateChange)
+                        && x.Has(Engine.States.Current.CurrentAcessorActivityConstants.newState, nameof(StateValues.Candidate))).RemoveOnceMatched();
 
             var termChanged = notifiableQueue
                 .AttachNotifier(x => x.Is(SampleVolatileStateHandler.Entity, SampleVolatileStateHandler.IncrementedCurrentTerm));
@@ -321,16 +321,16 @@ namespace Coracle.IntegrationTests.Tests
 
             var leaderEstablished = notifiableQueue
                 .AttachNotifier(x =>
-                    x.Is(CurrentStateAccessor.Entity, CurrentStateAccessor.StateChange)
-                        && x.Has(CurrentStateAccessor.newState, nameof(StateValues.Leader))).RemoveOnceMatched();
+                    x.Is(Engine.States.Current.CurrentAcessorActivityConstants.Entity, Engine.States.Current.CurrentAcessorActivityConstants.StateChange)
+                        && x.Has(Engine.States.Current.CurrentAcessorActivityConstants.newState, nameof(StateValues.Leader))).RemoveOnceMatched();
 
             var updatedIndices = notifiableQueue
                 .AttachNotifier(x =>
-                    x.Is(LeaderVolatileProperties.Entity, LeaderVolatileProperties.UpdatedIndices));
+                    x.Is(LeaderVolatileActivityConstants.Entity, LeaderVolatileActivityConstants.UpdatedIndices));
 
             var commitIndexUpdated = notifiableQueue
                 .AttachNotifier(x =>
-                    x.Is(AbstractState.Entity, AbstractState.ApplyingLogEntry));
+                    x.Is(AbstractStateActivityConstants.Entity, AbstractStateActivityConstants.ApplyingLogEntry));
 
             EnqueueRequestVoteSuccessResponse(MockNodeA);
             EnqueueRequestVoteSuccessResponse(MockNodeB);
@@ -691,8 +691,8 @@ namespace Coracle.IntegrationTests.Tests
 
             var candidateEstablished = notifiableQueue
                 .AttachNotifier(x =>
-                    x.Is(CurrentStateAccessor.Entity, CurrentStateAccessor.StateChange)
-                        && x.Has(CurrentStateAccessor.newState, nameof(StateValues.Candidate))).RemoveOnceMatched();
+                    x.Is(Engine.States.Current.CurrentAcessorActivityConstants.Entity, Engine.States.Current.CurrentAcessorActivityConstants.StateChange)
+                        && x.Has(Engine.States.Current.CurrentAcessorActivityConstants.newState, nameof(StateValues.Candidate))).RemoveOnceMatched();
 
             var currentConfiguration = Context.GetService<IClusterConfiguration>().CurrentConfiguration;
 
@@ -764,8 +764,8 @@ namespace Coracle.IntegrationTests.Tests
 
             assertableQueue
                 .Dig()
-                .UntilItSatisfies(_ => _.Is(ClusterConfiguration.Entity, ClusterConfiguration.NewUpdate)
-                    && _.HasMatchingParam(ClusterConfiguration.allNodeIds, param => param.ToString().ContainsThese(SUT, MockNodeA, MockNodeB, MockNewNodeC)),
+                .UntilItSatisfies(_ => _.Is(ActivityConstants.Entity, ActivityConstants.NewUpdate)
+                    && _.HasMatchingParam(ActivityConstants.allNodeIds, param => param.ToString().ContainsThese(SUT, MockNodeA, MockNodeB, MockNewNodeC)),
                         $"Joint Consensus should account for the new {MockNewNodeC} and all other existing nodes");
 
             assertableQueue
@@ -777,8 +777,8 @@ namespace Coracle.IntegrationTests.Tests
 
             assertableQueue
                 .Search()
-                .UntilItSatisfies(_ => _.Is(LeaderVolatileProperties.Entity, LeaderVolatileProperties.DecrementedNextIndexToFirstIndexOfPriorValidTerm)
-                    && _.HasMatchingParam(LeaderVolatileProperties.nodeId, param => param.ToString().ContainsThese(MockNewNodeC)),
+                .UntilItSatisfies(_ => _.Is(LeaderVolatileActivityConstants.Entity, LeaderVolatileActivityConstants.DecrementedNextIndexToFirstIndexOfPriorValidTerm)
+                    && _.HasMatchingParam(LeaderVolatileActivityConstants.nodeId, param => param.ToString().ContainsThese(MockNewNodeC)),
                         $"Since entries are not yet replicated to the {MockNewNodeC}, the NextIndex must be decremented accordingly");
 
             assertableQueue
@@ -803,7 +803,7 @@ namespace Coracle.IntegrationTests.Tests
             Context.NodeContext.GetMockNode(MockNewNodeC).AppendEntriesLock
                 .RemoteCalls
                 .Where(_ => _.input.Entries != null && _.input.Entries.Any())
-                .Where(_ => _.input.Entries.Any(t => t.Type.HasFlag(Raft.Engine.Logs.LogEntry.Types.Configuration)))
+                .Where(_ => _.input.Entries.Any(t => t.Type.HasFlag(Engine.Logs.LogEntry.Types.Configuration)))
                 .Select(_ => _.input)
                 .Count()
                 .Should().Be(2, "As the JointConsensus entry (C-old,new) and the C-new entry should both be sent to the new node");
@@ -811,7 +811,7 @@ namespace Coracle.IntegrationTests.Tests
             Context.NodeContext.GetMockNode(MockNodeB).AppendEntriesLock
                 .RemoteCalls
                 .Where(_ => _.input.Entries != null && _.input.Entries.Any())
-                .Where(_ => _.input.Entries.Any(t => t.Type.HasFlag(Raft.Engine.Logs.LogEntry.Types.Configuration)))
+                .Where(_ => _.input.Entries.Any(t => t.Type.HasFlag(Engine.Logs.LogEntry.Types.Configuration)))
                 .Select(_ => _.input)
                 .Count()
                 .Should().Be(2, "As the JointConsensus entry (C-old,new) and the C-new entry should both be sent to the abandoning node");
@@ -824,8 +824,8 @@ namespace Coracle.IntegrationTests.Tests
 
             assertableQueue
                 .Dig()
-                .UntilItSatisfies(_ => _.Is(ClusterConfiguration.Entity, ClusterConfiguration.NewUpdate)
-                    && _.HasMatchingParam(ClusterConfiguration.allNodeIds, param => param.ToString().ContainsThese(SUT, MockNodeA, MockNewNodeC)
+                .UntilItSatisfies(_ => _.Is(ActivityConstants.Entity, ActivityConstants.NewUpdate)
+                    && _.HasMatchingParam(ActivityConstants.allNodeIds, param => param.ToString().ContainsThese(SUT, MockNodeA, MockNewNodeC)
                         && param.ToString().DoesNotContainThese(MockNodeB)),
                         $"Target Configuration should have the new {MockNewNodeC} and all other existing nodes except {MockNodeB}");
 
@@ -859,8 +859,8 @@ namespace Coracle.IntegrationTests.Tests
 
             var followerEstablished = notifiableQueue
                 .AttachNotifier(x =>
-                    x.Is(CurrentStateAccessor.Entity, CurrentStateAccessor.StateChange)
-                        && x.Has(CurrentStateAccessor.newState, nameof(StateValues.Follower))).RemoveOnceMatched();
+                    x.Is(Engine.States.Current.CurrentAcessorActivityConstants.Entity, Engine.States.Current.CurrentAcessorActivityConstants.StateChange)
+                        && x.Has(Engine.States.Current.CurrentAcessorActivityConstants.newState, nameof(StateValues.Follower))).RemoveOnceMatched();
 
             var currentTerm = await Context.GetService<IPersistentStateHandler>().GetCurrentTerm();
             var lastLogIndexOfCurrentTerm = await Context.GetService<IPersistentStateHandler>().GetLastIndex();

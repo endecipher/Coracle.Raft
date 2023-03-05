@@ -1,7 +1,6 @@
-﻿using Coracle.IntegrationTests.Components.Helper;
-using Coracle.Raft.Engine.Node;
+﻿using Coracle.Raft.Engine.Node;
 
-namespace Coracle.IntegrationTests.Components.Node
+namespace Coracle.Raft.Tests.Components.Node
 {
     public interface ICoracleNodeAccessor
     {

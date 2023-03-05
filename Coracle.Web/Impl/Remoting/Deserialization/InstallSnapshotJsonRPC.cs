@@ -1,5 +1,5 @@
 ﻿using Coracle.Raft.Engine.Remoting.RPC;
-using Coracle.Samples.Data;
+using Coracle.Raft.Examples.Data;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 

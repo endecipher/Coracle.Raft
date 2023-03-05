@@ -1,4 +1,4 @@
-﻿using Coracle.Samples.ClientHandling;
+﻿using Coracle.Raft.Examples.ClientHandling;
 using Coracle.Web.Client;
 using Microsoft.AspNetCore.Mvc;
 

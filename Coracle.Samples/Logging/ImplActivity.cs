@@ -1,6 +1,6 @@
 ﻿using ActivityLogger.Logging;
 
-namespace Coracle.Samples.Logging
+namespace Coracle.Raft.Examples.Logging
 {
     public class ImplActivity : Activity
     {

@@ -1,7 +1,7 @@
 ﻿using Coracle.Raft.Engine.Configuration.Cluster;
 using Coracle.Raft.Engine.Discovery;
 
-namespace Coracle.Samples.Registrar
+namespace Coracle.Raft.Examples.Registrar
 {
     public interface INodeRegistrar
     {

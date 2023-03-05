@@ -7,11 +7,11 @@ using Coracle.Raft.Engine.States.LeaderEntities;
 using EntityMonitoring.FluentAssertions.Structure;
 using Newtonsoft.Json;
 using Coracle.Raft.Engine.Logs;
-using Coracle.Samples.ClientHandling;
-using Coracle.Samples.Registrar;
-using Coracle.IntegrationTests.Framework;
+using Coracle.Raft.Examples.Registrar;
+using Coracle.Raft.Examples.ClientHandling;
+using Coracle.Raft.Tests.Framework;
 
-namespace Coracle.IntegrationTests.Tests
+namespace Coracle.Raft.Tests.Integration
 {
     public abstract class BaseTest
     {

@@ -1,10 +1,10 @@
-﻿using Coracle.IntegrationTests.Components.Helper;
-using Coracle.Raft.Engine.Configuration.Cluster;
+﻿using Coracle.Raft.Engine.Configuration.Cluster;
 using Coracle.Raft.Engine.Remoting.RPC;
+using Coracle.Raft.Tests.Components.Helper;
 
-namespace Coracle.IntegrationTests.Framework
+namespace Coracle.Raft.Tests.Framework
 {
-    public class MockNodeController 
+    public class MockNodeController
     {
         internal NodeConfiguration Configuration { get; init; }
         internal RemoteAwaitedLock<IAppendEntriesRPC, AppendEntriesRPCResponse> AppendEntriesLock { get; init; }
@@ -40,5 +40,5 @@ namespace Coracle.IntegrationTests.Framework
         public void ApproveNextAppendEntriesInLine() => AppendEntriesLock.ApproveNextInLine();
     }
 
-    
+
 }

@@ -1,6 +1,6 @@
 ﻿using Coracle.Raft.Engine.Snapshots;
 
-namespace Coracle.Samples.Data
+namespace Coracle.Raft.Examples.Data
 {
     public class SnapshotDataChunk : ISnapshotDataChunk
     {

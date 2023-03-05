@@ -5,182 +5,27 @@ using EntityMonitoring.FluentAssertions.Structure;
 using FluentAssertions;
 using Xunit;
 using Coracle.Raft.Engine.Logs;
-using Coracle.Samples.ClientHandling;
-using Coracle.Samples.Data;
-using Coracle.IntegrationTests.Framework;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Serialization;
-using Newtonsoft.Json.Linq;
+using Coracle.Raft.Examples.Data;
+using Coracle.Raft.Examples.ClientHandling;
+using Coracle.Raft.Tests.Framework;
 
-namespace Coracle.IntegrationTests.Tests
+namespace Coracle.Raft.Tests.Integration
 {
-    public static class JsonExtensions
-    {
-        public static JToken RemoveFromLowestPossibleParent(this JToken node)
-        {
-            if (node == null)
-                return null;
-            var contained = node.AncestorsAndSelf().Where(t => t.Parent is JContainer && t.Parent.Type != JTokenType.Property).FirstOrDefault();
-            if (contained != null)
-                contained.Remove();
-            // Also detach the node from its immediate containing property -- Remove() does not do this even though it seems like it should
-            if (node.Parent is JProperty)
-                ((JProperty)node.Parent).Value = null;
-            return node;
-        }
-    }
-
     /// <summary>
     /// Tests basic characteristics of the log chain
     /// </summary>
-    [TestCaseOrderer($"Coracle.IntegrationTests.Framework.{nameof(ExecutionOrderer)}", $"Coracle.IntegrationTests")]
+    [TestCaseOrderer($"Coracle.Raft.Tests.Framework.{nameof(ExecutionOrderer)}", $"Coracle.Raft.Tests")]
     public class LogHolderWorkflowTest : BaseTest, IClassFixture<TestContext>
     {
         public LogHolderWorkflowTest(TestContext context) : base(context)
         {
         }
 
-        [JsonConverter((typeof(ActionConverter)))]
-        public class Item
-        {
-            public IEnumerable<Entry> Entries { get; set; }
-
-            public long Id { get; set; }
-
-            public string Name { get; set; }
-        }
-
-        public class Entry
-        {
-            public object Data { get; set; }
-
-            public string Name { get; set; }
-        }
-
-        class ActionConverter : JsonConverter
-        {
-            public override bool CanConvert(Type objectType)
-            {
-                return true;
-            }
-
-            public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
-            {
-                if (reader.TokenType == JsonToken.Null)
-                    return null;
-
-                var obj = JObject.Load(reader);
-                var contract = (JsonObjectContract)serializer.ContractResolver.ResolveContract(objectType);
-                var item = existingValue as Item ?? (Item)contract.DefaultCreator();
-
-                // Remove the Result property for manual deserialization
-                var objProperty = obj.GetValue(nameof(Item.Entries), StringComparison.OrdinalIgnoreCase).RemoveFromLowestPossibleParent();
-
-                // Populate the remaining properties.
-                using (var subReader = obj.CreateReader())
-                {
-                    serializer.Populate(subReader, item);
-                }
-
-                item.Entries = new List<Entry>();
-
-                // Process the Result property
-                if (objProperty != null)
-                {
-                    foreach (var child in objProperty.Children())
-                    {
-                        var entry = new Entry();
-
-                        var data = child.SelectToken(nameof(Entry.Data));
-
-                        using (var childReader = child.CreateReader())
-                        {
-                            serializer.Populate(childReader, entry);
-                        }
-
-                        if (entry.Name.Equals(nameof(Command)))
-                        {
-                            entry.Data = data.ToObject<Command>();
-                        }
-                        else if (entry.Name.Equals(nameof(Config)))
-                        {
-                            entry.Data = data.ToObject<Config>();
-                        }
-                    }
-                }
-
-                return item;
-            }
-
-            public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
-            {
-                
-            }
-        }
-
-        public class Command
-        {
-            public string CommandId = Guid.NewGuid().ToString();
-        }
-
-        public class Config
-        {
-            public long Type { get; set; }
-        }
-
-        public class Writer : ITraceWriter
-        {
-            public System.Diagnostics.TraceLevel LevelFilter => System.Diagnostics.TraceLevel.Verbose;
-
-            public List<string> Messages = new List<string>();
-
-            public void Trace(System.Diagnostics.TraceLevel level, string message, Exception ex)
-            {
-                Messages.Add(message ?? ex.Message);
-            }
-        }
-
         [Fact]
         [Order(1)]
         public async Task IsLogHavingSingleEntryInitially()
         {
-
-            var item = new Item { Entries = new List<Entry>
-            {
-                new Entry
-                {
-                    Data = new Command(),
-                    Name = nameof(Command),
-                },
-
-                new Entry
-                {
-                    Data = new Config()
-                    {
-                        Type = 12
-                    }
-                }
-            }, Id = 1, Name = "Hello" };
-
-
-            Writer writer = new Writer();
-            var s1 = JsonConvert.SerializeObject(item, new JsonSerializerSettings
-            {
-                TraceWriter = writer,
-
-            });
-
-
-            Writer writer1 = new Writer();
-            var obj1 = JsonConvert.DeserializeObject<Item>(s1, new JsonSerializerSettings
-            {
-
-                TraceWriter = writer1,
-
-            });
-
-
-
             #region Arrange
 
             Exception caughtException = null;
@@ -232,6 +77,7 @@ namespace Coracle.IntegrationTests.Tests
                 .Type
                 .Should().Be(LogEntry.Types.None, "As this is the initialized entry type");
 
+            Cleanup();
             #endregion
         }
 
@@ -312,6 +158,7 @@ namespace Coracle.IntegrationTests.Tests
                 .Type
                 .Should().Be(LogEntry.Types.NoOperation, "As this is the new entry's type");
 
+            Cleanup();
             #endregion
         }
 
@@ -396,6 +243,7 @@ namespace Coracle.IntegrationTests.Tests
                 .Type
                 .Should().Be(LogEntry.Types.None, "As this is it the initial entry's property");
 
+            Cleanup();
             #endregion
         }
 
@@ -449,6 +297,7 @@ namespace Coracle.IntegrationTests.Tests
             _3OutOf4Majority
                 .Should().Be(true);
 
+            Cleanup();
             #endregion
         }
     }

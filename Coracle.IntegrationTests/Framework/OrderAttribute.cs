@@ -1,4 +1,4 @@
-﻿namespace Coracle.IntegrationTests.Framework
+﻿namespace Coracle.Raft.Tests.Framework
 {
     [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
     public class OrderAttribute : Attribute
