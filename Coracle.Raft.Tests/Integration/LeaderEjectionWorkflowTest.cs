@@ -34,6 +34,9 @@ using Coracle.Raft.Engine.Command;
 using Coracle.Raft.Examples.ClientHandling;
 using Coracle.Raft.Tests.Framework;
 using Coracle.Raft.Tests.Components.Helper;
+using Coracle.Raft.Engine.States.LeaderEntities;
+using Coracle.Raft.Examples.Data;
+using Coracle.Raft.Tests.Components.Remoting;
 
 namespace Coracle.Raft.Tests.Integration
 {
@@ -51,121 +54,7 @@ namespace Coracle.Raft.Tests.Integration
         [Order(1)]
         public async Task IsTurningToLeader()
         {
-            #region Arrange
-            Context.GetService<IActivityMonitor<Activity>>().Start();
-
-            var notifiableQueue = CaptureActivities();
-
-            Exception caughtException = null;
-            CommandExecutionResult clientHandlingResult = null;
-            var (Command, Note) = TestAddCommand();
-
-            var majorityAttained = notifiableQueue
-                .AttachNotifier(x => x.Is(ElectionManager.Entity, ElectionManager.MajorityAttained));
-
-            var commitIndexUpdated = notifiableQueue
-                .AttachNotifier(x =>
-                    x.Is(AbstractStateActivityConstants.Entity, AbstractStateActivityConstants.ApplyingLogEntry));
-
-            StateCapture captureAfterCommand = null;
-
-            #endregion
-
-            #region Act
-
-            try
-            {
-                InitializeEngineConfiguration();
-                CreateMockNode(MockNodeA);
-                CreateMockNode(MockNodeB);
-                RegisterMockNodeInRegistrar(MockNodeA);
-                RegisterMockNodeInRegistrar(MockNodeB);
-
-                InitializeNode();
-                StartNode();
-
-                EnqueueMultipleSuccessResponses(MockNodeA);
-                EnqueueMultipleSuccessResponses(MockNodeB);
-
-                var electionTimer = Context.GetService<IElectionTimer>() as TestElectionTimer;
-
-                //This will make sure that the ElectionTimer callback invocation is approved for the Candidacy
-                electionTimer.AwaitedLock.ApproveNext();
-
-                //Wait until Majority has been attained
-                majorityAttained.Wait(EventNotificationTimeOut);
-
-                var heartBeatTimer = Context.GetService<IHeartbeatTimer>() as TestHeartbeatTimer;
-
-                //This will make sure that the Heartbeat callback invocation is approved for SendAppendEntries
-                heartBeatTimer.AwaitedLock.ApproveNext();
-
-                commitIndexUpdated.Wait(EventNotificationTimeOut);
-
-                var isPronouncedLeaderSelf = Context.GetService<ILeaderNodePronouncer>().IsLeaderRecognized
-                    && Context.GetService<ILeaderNodePronouncer>().RecognizedLeaderConfiguration.UniqueNodeId.Equals(SUT);
-
-                //Send parallel heartbeats for partial simulation of a real scenario
-                heartBeatTimer.AwaitedLock.ApproveNext();
-
-                clientHandlingResult = await Context.GetService<ICommandExecutor>()
-                    .Execute(Command, CancellationToken.None);
-
-                //Send parallel heartbeats for partial simulation of a real scenario
-                heartBeatTimer.AwaitedLock.ApproveNext();
-                commitIndexUpdated.Wait(EventNotificationTimeOut);
-
-                captureAfterCommand = new StateCapture(Context.GetService<ICurrentStateAccessor>().Get());
-            }
-            catch (Exception e)
-            {
-                caughtException = e;
-            }
-
-            #endregion
-
-            #region Assertions
-
-            var assertableQueue = StartAssertions(notifiableQueue);
-
-            caughtException
-                .Should().Be(null, $" ");
-
-            majorityAttained.IsConditionMatched.Should().BeTrue();
-            commitIndexUpdated.IsConditionMatched.Should().BeTrue();
-
-            Context.GetService<INoteStorage>()
-                .TryGet(Note.UniqueHeader, out var note)
-                .Should().BeTrue();
-
-            note.Should().NotBeNull("Note must exist");
-
-            note.Text.Should().Be(Note.Text, "Note should match the testNote supplied");
-
-            captureAfterCommand
-                .CommitIndex
-                .Should().Be(2, "The command entry having index 2 should have been replicated to other nodes and also comitted");
-
-            captureAfterCommand
-                .LastApplied
-                .Should().Be(2, "The command entry having index 2 should have been replicated to other nodes and also comitted");
-
-            captureAfterCommand
-                .MatchIndexes
-                .Values
-                .Should()
-                .Match((i) => i.All(_ => _.Equals(2)),
-                    $"{MockNodeA} and {MockNodeB} should have had replicated all entries up until the leader's last log index");
-
-            captureAfterCommand
-                .NextIndexes
-                .Values
-                .Should()
-                .Match((i) => i.All(_ => _.Equals(3)),
-                    $"{MockNodeA} and {MockNodeB} should have had replicated all entries up until the leader's last log index, and the nextIndex to send for each peer mock node should be one greater, i.e 3");
-
-            Cleanup();
-            #endregion
+            await EstablishSampleLeader();
         }
 
         [Fact]
@@ -290,11 +179,11 @@ namespace Coracle.Raft.Tests.Integration
 
             captureAfterDecommission
                 .CommitIndex
-                .Should().Be(lastIndex, "The conf C-new entry should have been replicated to other nodes and also comitted");
+                .Should().Be(lastIndex, "The conf C-new entry should have been replicated to other nodes and also committed");
 
             captureAfterDecommission
                 .LastApplied
-                .Should().Be(lastIndex, "The conf C-new entry should have been replicated to other nodes and also comitted");
+                .Should().Be(lastIndex, "The conf C-new entry should have been replicated to other nodes and also committed");
 
             captureAfterDecommission
                 .MatchIndexes

@@ -32,6 +32,12 @@ using Coracle.Raft.Engine.Logs;
 using Coracle.Raft.Examples.Registrar;
 using Coracle.Raft.Examples.ClientHandling;
 using Coracle.Raft.Tests.Framework;
+using Coracle.Raft.Engine.Command;
+using Coracle.Raft.Examples.Data;
+using Coracle.Raft.Tests.Components.Remoting;
+using Coracle.Raft.Engine.Helper;
+using Coracle.Raft.Tests.Components.Helper;
+using FluentAssertions;
 
 namespace Coracle.Raft.Tests.Integration
 {
@@ -48,7 +54,8 @@ namespace Coracle.Raft.Tests.Integration
         public const int ConfiguredEventProcessorWait = 1 * MilliSeconds;
         public const int ConfiguredRpcEnqueueWaitInterval = 10 * MilliSeconds;
         public const int ConfiguredRpcEnqueueFailureCounter = 100;
-        public TimeSpan EventNotificationTimeOut = TimeSpan.FromSeconds(20);
+        public TimeSpan EventNotificationTimeOut = TimeSpan.FromSeconds(10);
+        public TimeSpan SmallEventNotificationTimeOut = TimeSpan.FromSeconds(2);
 
         public EngineConfigurationSettings TestEngineSettings => new EngineConfigurationSettings
         {
@@ -70,27 +77,28 @@ namespace Coracle.Raft.Tests.Integration
             ProcessorQueueSize = ConfiguredEventProcessorQueueSize,
             ProcessorWaitTimeWhenQueueEmpty_InMilliseconds = ConfiguredEventProcessorWait,
 
-            ClientCommandTimeout_InMilliseconds = 500 * MilliSeconds,
+            ClientCommandTimeout_InMilliseconds = 2 * Seconds,
 
             MinElectionTimeout_InMilliseconds = 100 * MilliSeconds,
             MaxElectionTimeout_InMilliseconds = 150 * MilliSeconds,
             EntryCommitWaitTimeout_InMilliseconds = 500 * MilliSeconds,
 
-            AppendEntriesTimeoutOnSend_InMilliseconds = 5 * Seconds,
-            AppendEntriesTimeoutOnReceive_InMilliseconds = 5 * Seconds,
+            AppendEntriesTimeoutOnSend_InMilliseconds = 1 * Seconds,
+            AppendEntriesTimeoutOnReceive_InMilliseconds = 1 * Seconds,
 
-            RequestVoteTimeoutOnSend_InMilliseconds = 5 * Seconds,
-            RequestVoteTimeoutOnReceive_InMilliseconds = 5 * Seconds,
+            RequestVoteTimeoutOnSend_InMilliseconds = 1 * Seconds,
+            RequestVoteTimeoutOnReceive_InMilliseconds = 1 * Seconds,
 
-            CatchUpOfNewNodesTimeout_InMilliseconds = 10 * Seconds,
-            ConfigurationChangeHandleTimeout_InMilliseconds = 15 * Seconds,
+            CatchUpOfNewNodesTimeout_InMilliseconds = 4 * Seconds,
+
+            ConfigurationChangeHandleTimeout_InMilliseconds = 6 * Seconds,
 
             CompactionWaitPeriod_InMilliseconds = 1 * Seconds,
-            InstallSnapshotChunkTimeoutOnReceive_InMilliseconds = 5 * Seconds,
-            InstallSnapshotChunkTimeoutOnSend_InMilliseconds = 5 * Seconds,
+            InstallSnapshotChunkTimeoutOnReceive_InMilliseconds = 1 * Seconds,
+            InstallSnapshotChunkTimeoutOnSend_InMilliseconds = 1 * Seconds,
 
             CompactionAttemptInterval_InMilliseconds = 10 * MilliSeconds,
-            CompactionAttemptTimeout_InMilliseconds = 10 * Seconds,
+            CompactionAttemptTimeout_InMilliseconds = 8 * Seconds,
 
             SnapshotThresholdSize = 5,
             SnapshotBufferSizeFromLastEntry = 1
@@ -250,11 +258,185 @@ namespace Coracle.Raft.Tests.Integration
             return list;
         }
 
-
         public string Serialized(object data)
         {
             return JsonConvert.SerializeObject(data);
         }
+
+        #region Turning To Leader for uncommon workflows
+
+        protected async Task EstablishSampleLeader()
+        {
+            #region Arrange
+            Context.GetService<IActivityMonitor<Activity>>().Start();
+
+            var notifiableQueue = CaptureActivities();
+
+            Exception caughtException = null;
+            CommandExecutionResult clientHandlingResult = null;
+
+            var (Command, Note) = TestAddCommand();
+
+            var majorityAttained = notifiableQueue
+                .AttachNotifier(x => x.Is(ElectionManager.Entity, ElectionManager.MajorityAttained));
+
+            var commitIndexUpdated = notifiableQueue
+                .AttachNotifier(x =>
+                    x.Is(AbstractStateActivityConstants.Entity, AbstractStateActivityConstants.ApplyingLogEntry));
+
+            StateCapture captureAfterCommand = null;
+
+            var candidateEstablished = notifiableQueue
+                .AttachNotifier(x =>
+                    x.Is(Engine.States.Current.CurrentAcessorActivityConstants.Entity, Engine.States.Current.CurrentAcessorActivityConstants.StateChange)
+                        && x.Has(Engine.States.Current.CurrentAcessorActivityConstants.newState, nameof(StateValues.Candidate))).RemoveOnceMatched();
+
+            var termChanged = notifiableQueue
+                .AttachNotifier(x => x.Is(SampleVolatileStateHandler.Entity, SampleVolatileStateHandler.IncrementedCurrentTerm));
+
+            var remoteCallMade = notifiableQueue
+                .AttachNotifier(x => x.Is(TestOutboundRequestHandler.TestRemoteManagerEntity, TestOutboundRequestHandler.OutboundRequestVoteRPC));
+
+            var sessionReceiveVote = notifiableQueue
+                .AttachNotifier(x => x.Is(ElectionManager.Entity, ElectionManager.ReceivedVote));
+
+            var leaderEstablished = notifiableQueue
+                .AttachNotifier(x =>
+                    x.Is(Engine.States.Current.CurrentAcessorActivityConstants.Entity, Engine.States.Current.CurrentAcessorActivityConstants.StateChange)
+                        && x.Has(Engine.States.Current.CurrentAcessorActivityConstants.newState, nameof(StateValues.Leader))).RemoveOnceMatched();
+
+            var updatedIndices = notifiableQueue
+                .AttachNotifier(x =>
+                    x.Is(LeaderVolatileActivityConstants.Entity, LeaderVolatileActivityConstants.UpdatedIndices));
+
+
+            #endregion
+
+            #region Act
+
+            try
+            {
+                InitializeEngineConfiguration();
+                CreateMockNode(MockNodeA);
+                CreateMockNode(MockNodeB);
+                RegisterMockNodeInRegistrar(MockNodeA);
+                RegisterMockNodeInRegistrar(MockNodeB);
+
+                InitializeNode();
+                StartNode();
+
+                EnqueueMultipleSuccessResponses(MockNodeA);
+                EnqueueMultipleSuccessResponses(MockNodeB);
+
+                var electionTimer = Context.GetService<IElectionTimer>() as TestElectionTimer;
+
+                //This will make sure that the ElectionTimer callback invocation is approved for the Candidacy
+                electionTimer.AwaitedLock.ApproveNext();
+
+                //Wait until current state is Candidate
+                candidateEstablished.Wait(EventNotificationTimeOut);
+
+                //Wait until Term incremented
+                termChanged.Wait(EventNotificationTimeOut);
+
+                //Wait until TestRemoteManager receives a call
+                remoteCallMade.Wait(EventNotificationTimeOut);
+
+                //Wait until ElectionSession receives a vote
+                sessionReceiveVote.Wait(EventNotificationTimeOut);
+
+                //Wait until Majority has been attained
+                majorityAttained.Wait(EventNotificationTimeOut);
+
+                var heartBeatTimer = Context.GetService<IHeartbeatTimer>() as TestHeartbeatTimer;
+
+                //This will make sure that the Heartbeat callback invocation is approved for SendAppendEntries
+                heartBeatTimer.AwaitedLock.ApproveNext();
+
+                //Wait until current state is now Leader
+                leaderEstablished.Wait(EventNotificationTimeOut);
+
+                //Send parallel heartbeats for partial simulation of a real scenario
+                heartBeatTimer.AwaitedLock.ApproveNext();
+
+                var isPronouncedLeaderSelf = Context.GetService<ILeaderNodePronouncer>().IsLeaderRecognized
+                    && Context.GetService<ILeaderNodePronouncer>().RecognizedLeaderConfiguration.UniqueNodeId.Equals(SUT);
+
+                //Send parallel heartbeats for partial simulation of a real scenario
+                heartBeatTimer.AwaitedLock.ApproveNext();
+
+                updatedIndices.Wait(EventNotificationTimeOut);
+                commitIndexUpdated.Wait(EventNotificationTimeOut);
+
+                //Send parallel heartbeats for partial simulation of a real scenario
+                heartBeatTimer.AwaitedLock.ApproveNext();
+                updatedIndices.Wait(EventNotificationTimeOut);
+
+                //Send parallel heartbeats for partial simulation of a real scenario
+                heartBeatTimer.AwaitedLock.ApproveNext();
+
+                clientHandlingResult = await Context.GetService<ICommandExecutor>()
+                    .Execute(Command, CancellationToken.None);
+
+                //Send parallel heartbeats for partial simulation of a real scenario
+                heartBeatTimer.AwaitedLock.ApproveNext();
+                updatedIndices.Wait(EventNotificationTimeOut);
+                commitIndexUpdated.Wait(EventNotificationTimeOut);
+
+                captureAfterCommand = new StateCapture(Context.GetService<ICurrentStateAccessor>().Get());
+            }
+            catch (Exception e)
+            {
+                caughtException = e;
+            }
+
+            #endregion
+
+            #region Assertions
+
+            var assertableQueue = StartAssertions(notifiableQueue);
+
+            caughtException
+                .Should().Be(null, $" ");
+
+            majorityAttained.IsConditionMatched.Should().BeTrue();
+            commitIndexUpdated.IsConditionMatched.Should().BeTrue();
+
+            Context.GetService<INoteStorage>()
+                .TryGet(Note.UniqueHeader, out var note)
+                .Should().BeTrue();
+
+            note.Should().NotBeNull("Note must exist");
+
+            note.Text.Should().Be(Note.Text, "Note should match the testNote supplied");
+
+            captureAfterCommand
+                .CommitIndex
+                .Should().Be(2, "The command entry having index 2 should have been replicated to other nodes and also committed");
+
+            captureAfterCommand
+                .LastApplied
+                .Should().Be(2, "The command entry having index 2 should have been replicated to other nodes and also committed");
+
+            captureAfterCommand
+                .MatchIndexes
+                .Values
+                .Should()
+                .Match((i) => i.All(_ => _.Equals(2)),
+                    $"{MockNodeA} and {MockNodeB} should have had replicated all entries up until the leader's last log index");
+
+            captureAfterCommand
+                .NextIndexes
+                .Values
+                .Should()
+                .Match((i) => i.All(_ => _.Equals(3)),
+                    $"{MockNodeA} and {MockNodeB} should have had replicated all entries up until the leader's last log index, and the nextIndex to send for each peer mock node should be one greater, i.e 3");
+
+            Cleanup();
+            #endregion
+        }
+
+        #endregion
     }
 
     public class StateCapture

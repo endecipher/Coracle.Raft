@@ -282,9 +282,9 @@ namespace Coracle.Raft.Examples.Data
 
             if (reachedThreshold)
             {
-                var uncomittedHeader = await SnapshotManager.CreateFile(entriesToMerge, currentConfiguration);
+                var uncommittedHeader = await SnapshotManager.CreateFile(entriesToMerge, currentConfiguration);
 
-                return uncomittedHeader;
+                return uncommittedHeader;
             }
 
             return null;

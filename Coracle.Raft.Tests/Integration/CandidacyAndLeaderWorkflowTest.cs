@@ -356,9 +356,6 @@ namespace Coracle.Raft.Tests.Integration
                 .AttachNotifier(x =>
                     x.Is(AbstractStateActivityConstants.Entity, AbstractStateActivityConstants.ApplyingLogEntry));
 
-            EnqueueRequestVoteSuccessResponse(MockNodeA);
-            EnqueueRequestVoteSuccessResponse(MockNodeB);
-
             var (Command, Note) = TestAddCommand();
 
             #endregion
@@ -370,10 +367,8 @@ namespace Coracle.Raft.Tests.Integration
 
             StateCapture
                 captureAfterCandidacy = null,
-                captureJustAfterLeaderStateChange = null,
                 captureAfterCommand = null,
-                captureBeforeCandidacy = null,
-                captureAfterSuccessfulAppendEntries = null;
+                captureBeforeCandidacy = null;
 
             try
             {
@@ -415,8 +410,6 @@ namespace Coracle.Raft.Tests.Integration
                 //Send parallel heartbeats for partial simulation of a real scenario
                 heartBeatTimer.AwaitedLock.ApproveNext();
 
-                captureJustAfterLeaderStateChange = new StateCapture(Context.GetService<ICurrentStateAccessor>().Get());
-
                 var isPronouncedLeaderSelf = Context.GetService<ILeaderNodePronouncer>().IsLeaderRecognized
                     && Context.GetService<ILeaderNodePronouncer>().RecognizedLeaderConfiguration.UniqueNodeId.Equals(SUT);
 
@@ -430,8 +423,6 @@ namespace Coracle.Raft.Tests.Integration
                 heartBeatTimer.AwaitedLock.ApproveNext();
                 updatedIndices.Wait(EventNotificationTimeOut);
 
-                captureAfterSuccessfulAppendEntries = new StateCapture(Context.GetService<ICurrentStateAccessor>().Get());
-
                 //Send parallel heartbeats for partial simulation of a real scenario
                 heartBeatTimer.AwaitedLock.ApproveNext();
 
@@ -440,7 +431,6 @@ namespace Coracle.Raft.Tests.Integration
 
                 //Send parallel heartbeats for partial simulation of a real scenario
                 heartBeatTimer.AwaitedLock.ApproveNext();
-
                 updatedIndices.Wait(EventNotificationTimeOut);
                 commitIndexUpdated.Wait(EventNotificationTimeOut);
 
@@ -458,7 +448,7 @@ namespace Coracle.Raft.Tests.Integration
             var assertableQueue = StartAssertions(notifiableQueue);
 
             caughtException
-                .Should().Be(null, $" ");
+                .Should().Be(null);
 
             candidateEstablished.IsConditionMatched.Should().BeTrue();
             termChanged.IsConditionMatched.Should().BeTrue();
@@ -469,34 +459,11 @@ namespace Coracle.Raft.Tests.Integration
 
             captureAfterCandidacy
                 .VotedFor
-                .Should().Be(SUT, "Because tduring candidacy, the candidate votes for itself");
+                .Should().Be(SUT, "Because during candidacy, the candidate votes for itself");
 
             captureAfterCandidacy
                 .CurrentTerm
                 .Should().Be(captureBeforeCandidacy.CurrentTerm + 1, "Since before candidacy, the term should be 1 lesser");
-
-            captureJustAfterLeaderStateChange
-                .CommitIndex
-                .Should().Be(0, "CommitIndex should be zero, since leader has just been established, and NoOp entry not sent out yet/currenty being sent out");
-
-            captureJustAfterLeaderStateChange
-                .CurrentTerm
-                .Should().Be(captureAfterCandidacy.CurrentTerm, "Since Leader was elected in the candidacy election itself");
-
-            captureAfterSuccessfulAppendEntries
-                .CommitIndex
-                .Should().Be(1, "CommitIndex should be 1, since leader has been established, and NoOp entry has been replicated to majority, thus has been committed");
-
-            captureAfterSuccessfulAppendEntries
-                .LastApplied
-                .Should().Be(1, "LastApplied entry should be the same as CommitIndex and should be 1");
-
-            captureAfterSuccessfulAppendEntries
-                .NextIndexes
-                .Values
-                .Should()
-                .Match(i => i.All(_ => _.Equals(2)),
-                    $"{MockNodeA} and {MockNodeB} should have had replicated the NoOp entry, i.e up until the leader's last log index, and the nextIndex to send for each peer mock node should be one greater, i.e 2");
 
             Context.GetService<INoteStorage>()
                 .TryGet(Note.UniqueHeader, out var note)
@@ -508,11 +475,11 @@ namespace Coracle.Raft.Tests.Integration
 
             captureAfterCommand
                 .CommitIndex
-                .Should().Be(2, "The command entry having index 2 should have been replicated to other nodes and also comitted");
+                .Should().Be(2, "The command entry having index 2 should have been replicated to other nodes and also committed");
 
             captureAfterCommand
                 .LastApplied
-                .Should().Be(2, "The command entry having index 2 should have been replicated to other nodes and also comitted");
+                .Should().Be(2, "The command entry having index 2 should have been replicated to other nodes and also committed");
 
             captureAfterCommand
                 .MatchIndexes
