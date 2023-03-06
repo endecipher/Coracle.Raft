@@ -20,6 +20,7 @@
 // SOFTWARE.
 #endregion
 
+using Coracle.Raft.Tests.Integration;
 using System.Collections.Concurrent;
 
 
@@ -60,28 +61,39 @@ namespace Coracle.Raft.Tests.Components.Helper
 
         public (TResponse response, Exception exception) WaitUntilResponse(TInput input)
         {
-            if (Programs.TryDequeue(out var action))
+            bool deQueuedProgram = false;
+            int failureCounter = 0;
+
+            do
             {
-                action.approvalLock.Wait();
-                action.approvalLock.Reset();
+                deQueuedProgram = Programs.TryDequeue(out var action);
 
-                var result = action.program.Invoke(input);
-
-                RemoteCalls.Enqueue((input, result));
-
-                if (result is Exception)
+                if (deQueuedProgram)
                 {
-                    return (null, (Exception)result);
+                    action.approvalLock.Wait();
+                    action.approvalLock.Reset();
+
+                    var result = action.program.Invoke(input);
+
+                    RemoteCalls.Enqueue((input, result));
+
+                    if (result is Exception)
+                    {
+                        return (null, (Exception)result);
+                    }
+                    else
+                    {
+                        return ((TResponse)result, null);
+                    }
                 }
                 else
                 {
-                    return ((TResponse)result, null);
+                    failureCounter++;
+                    Task.Delay(BaseTest.ConfiguredRpcEnqueueWaitInterval).Wait();
                 }
             }
-            else
-            {
-                Task.Delay(4000).Wait();
-            }
+            while (!deQueuedProgram && failureCounter <= BaseTest.ConfiguredRpcEnqueueFailureCounter);
+
             throw new InvalidOperationException($"No Programs Enqueued for {typeof(TInput).AssemblyQualifiedName} and {typeof(TResponse).AssemblyQualifiedName}");
         }
 

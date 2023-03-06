@@ -46,7 +46,6 @@ using Coracle.Raft.Tests.Components.Remoting;
 
 namespace Coracle.Raft.Tests.Integration
 {
-
     /// <summary>
     /// Tests the common workflow, which comprises of:
     /// <list type="number">
@@ -378,6 +377,9 @@ namespace Coracle.Raft.Tests.Integration
 
             try
             {
+                EnqueueMultipleSuccessResponses(MockNodeA);
+                EnqueueMultipleSuccessResponses(MockNodeB);
+
                 captureBeforeCandidacy = new StateCapture(Context.GetService<ICurrentStateAccessor>().Get());
 
                 var electionTimer = Context.GetService<IElectionTimer>() as TestElectionTimer;
@@ -388,25 +390,21 @@ namespace Coracle.Raft.Tests.Integration
                 //Wait until current state is Candidate
                 candidateEstablished.Wait(EventNotificationTimeOut);
 
-                ////Wait until Term incremented
+                //Wait until Term incremented
                 termChanged.Wait(EventNotificationTimeOut);
 
-                ////Wait until TestRemoteManager receives a call
+                //Wait until TestRemoteManager receives a call
                 remoteCallMade.Wait(EventNotificationTimeOut);
 
                 captureAfterCandidacy = new StateCapture(Context.GetService<ICurrentStateAccessor>().Get());
 
-                ////Wait until ElectionSession receives a vote
+                //Wait until ElectionSession receives a vote
                 sessionReceiveVote.Wait(EventNotificationTimeOut);
 
-                ////Wait until Majority has been attained
+                //Wait until Majority has been attained
                 majorityAttained.Wait(EventNotificationTimeOut);
 
-
                 var heartBeatTimer = Context.GetService<IHeartbeatTimer>() as TestHeartbeatTimer;
-
-                EnqueueAppendEntriesSuccessResponse(MockNodeA);
-                EnqueueAppendEntriesSuccessResponse(MockNodeB);
 
                 //This will make sure that the Heartbeat callback invocation is approved for SendAppendEntries
                 heartBeatTimer.AwaitedLock.ApproveNext();
@@ -414,26 +412,34 @@ namespace Coracle.Raft.Tests.Integration
                 //Wait until current state is now Leader
                 leaderEstablished.Wait(EventNotificationTimeOut);
 
+                //Send parallel heartbeats for partial simulation of a real scenario
+                heartBeatTimer.AwaitedLock.ApproveNext();
+
                 captureJustAfterLeaderStateChange = new StateCapture(Context.GetService<ICurrentStateAccessor>().Get());
 
                 var isPronouncedLeaderSelf = Context.GetService<ILeaderNodePronouncer>().IsLeaderRecognized
                     && Context.GetService<ILeaderNodePronouncer>().RecognizedLeaderConfiguration.UniqueNodeId.Equals(SUT);
 
+                //Send parallel heartbeats for partial simulation of a real scenario
+                heartBeatTimer.AwaitedLock.ApproveNext();
+
                 updatedIndices.Wait(EventNotificationTimeOut);
                 commitIndexUpdated.Wait(EventNotificationTimeOut);
 
-                await Task.Delay(50);
+                //Send parallel heartbeats for partial simulation of a real scenario
+                heartBeatTimer.AwaitedLock.ApproveNext();
+                updatedIndices.Wait(EventNotificationTimeOut);
 
                 captureAfterSuccessfulAppendEntries = new StateCapture(Context.GetService<ICurrentStateAccessor>().Get());
 
-                EnqueueAppendEntriesSuccessResponse(MockNodeA);
-                EnqueueAppendEntriesSuccessResponse(MockNodeB);
-
-                EnqueueAppendEntriesSuccessResponse(MockNodeA);
-                EnqueueAppendEntriesSuccessResponse(MockNodeB);
+                //Send parallel heartbeats for partial simulation of a real scenario
+                heartBeatTimer.AwaitedLock.ApproveNext();
 
                 clientHandlingResult = await Context.GetService<ICommandExecutor>()
                     .Execute(Command, CancellationToken.None);
+
+                //Send parallel heartbeats for partial simulation of a real scenario
+                heartBeatTimer.AwaitedLock.ApproveNext();
 
                 updatedIndices.Wait(EventNotificationTimeOut);
                 commitIndexUpdated.Wait(EventNotificationTimeOut);
@@ -548,18 +554,23 @@ namespace Coracle.Raft.Tests.Integration
             Exception caughtException = null;
             CommandExecutionResult clientHandlingResult = null;
             StateCapture captureAfterReadOnlyCommand = null, captureBeforeReadOnlyCommand = null;
+            var heartBeatTimer = Context.GetService<IHeartbeatTimer>() as TestHeartbeatTimer;
+
             try
             {
                 captureBeforeReadOnlyCommand = new StateCapture(Context.GetService<ICurrentStateAccessor>().Get());
 
-                EnqueueAppendEntriesSuccessResponse(MockNodeA);
-                EnqueueAppendEntriesSuccessResponse(MockNodeB);
+                EnqueueMultipleSuccessResponses(MockNodeA);
+                EnqueueMultipleSuccessResponses(MockNodeB);
 
-                EnqueueAppendEntriesSuccessResponse(MockNodeA); // For Deposition Heartbeats 
-                EnqueueAppendEntriesSuccessResponse(MockNodeB); // For Deposition Heartbeats
-                
+                //Send parallel heartbeats for partial simulation of a real scenario
+                heartBeatTimer.AwaitedLock.ApproveNext();
+
                 clientHandlingResult = await Context.GetService<ICommandExecutor>()
                     .Execute(command, CancellationToken.None);
+
+                //Send parallel heartbeats for partial simulation of a real scenario
+                heartBeatTimer.AwaitedLock.ApproveNext();
 
                 captureAfterReadOnlyCommand = new StateCapture(Context.GetService<ICurrentStateAccessor>().Get());
             }
@@ -588,7 +599,6 @@ namespace Coracle.Raft.Tests.Integration
             assertableQueue
                 .Dig()
                 .UntilItSatisfies(_ => _.Is(GlobalAwaiter.Entity, GlobalAwaiter.AwaitingNoDeposition), "Node must check if it has been deposed before responding to read-only requests");
-
 
             captureBeforeReadOnlyCommand
                 .CommitIndex
@@ -652,7 +662,6 @@ namespace Coracle.Raft.Tests.Integration
             {
                 caughtException = e;
             }
-
 
             #endregion
 
@@ -734,9 +743,16 @@ namespace Coracle.Raft.Tests.Integration
 
             Exception caughtException = null;
             ConfigurationChangeResult changeResult = null;
+            var heartBeatTimer = Context.GetService<IHeartbeatTimer>() as TestHeartbeatTimer;
 
             try
             {
+                EnqueueAppendEntriesSuccessResponse(MockNodeA);
+                EnqueueAppendEntriesSuccessResponse(MockNodeB);
+
+                //Send parallel heartbeats for partial simulation of a real scenario
+                heartBeatTimer.AwaitedLock.ApproveNext();
+
                 EnqueueAppendEntriesSuccessResponse(MockNodeA);
                 EnqueueAppendEntriesSuccessResponse(MockNodeB);
 
@@ -750,11 +766,9 @@ namespace Coracle.Raft.Tests.Integration
                 }, approveImmediately: true);
 
                 // Next time, it sends true
-                EnqueueAppendEntriesSuccessResponse(MockNewNodeC);
-
-                EnqueueAppendEntriesSuccessResponse(MockNodeA); // For Deposition checks
-                EnqueueAppendEntriesSuccessResponse(MockNodeB); // For Deposition checks
-                EnqueueAppendEntriesSuccessResponse(MockNewNodeC); // For Deposition checks
+                EnqueueMultipleSuccessResponses(MockNewNodeC);
+                EnqueueMultipleSuccessResponses(MockNodeA); // For Deposition checks
+                EnqueueMultipleSuccessResponses(MockNodeB); // For Deposition checks
 
                 changeResult = await Context.GetService<IConfigurationRequestExecutor>().IssueChange(new ConfigurationChangeRequest
                 {
@@ -762,6 +776,8 @@ namespace Coracle.Raft.Tests.Integration
                     NewConfiguration = newConfiguration
 
                 }, CancellationToken.None);
+
+
             }
             catch (Exception e)
             {
@@ -811,25 +827,25 @@ namespace Coracle.Raft.Tests.Integration
             Context.NodeContext.GetMockNode(MockNewNodeC).AppendEntriesLock
                 .RemoteCalls
                 .Where(_ => _.input.Entries != null && _.input.Entries.Any())
-                .Where(_ => _.input.Entries.Any(t => t.Type.HasFlag(Engine.Logs.LogEntry.Types.Configuration)))
-                .Select(_ => _.input)
+                .SelectMany(_ => _.input.Entries)
+                .Where(_ => _.Type.HasFlag(Engine.Logs.LogEntry.Types.Configuration))
                 .Count()
                 .Should().BeGreaterThanOrEqualTo(2, "As the JointConsensus entry (C-old,new) and the C-new entry should both be sent to the new node");
 
             Context.NodeContext.GetMockNode(MockNodeB).AppendEntriesLock
                 .RemoteCalls
                 .Where(_ => _.input.Entries != null && _.input.Entries.Any())
-                .Where(_ => _.input.Entries.Any(t => t.Type.HasFlag(Engine.Logs.LogEntry.Types.Configuration)))
-                .Select(_ => _.input)
+                .SelectMany(_ => _.input.Entries)
+                .Where(_ => _.Type.HasFlag(Engine.Logs.LogEntry.Types.Configuration))
                 .Count()
                 .Should().BeGreaterThanOrEqualTo(2, "As the JointConsensus entry (C-old,new) and the C-new entry should both be sent to the abandoning node");
 
             Context.NodeContext.GetMockNode(MockNewNodeC).AppendEntriesLock
                 .RemoteCalls
                 .Where(_ => _.input.Entries != null && _.input.Entries.Any())
-                .SelectMany(x => x.input.Entries)
-                .Where(_ => _ != null && _.Type.HasFlag(Engine.Logs.LogEntry.Types.Configuration))
-                .Select(x=> x.Content as IEnumerable<NodeConfiguration>)
+                .SelectMany(_ => _.input.Entries)
+                .Where(_ => _.Type.HasFlag(Engine.Logs.LogEntry.Types.Configuration))
+                .Select(_ => _.Content as IEnumerable<NodeConfiguration>)
                 .Should().Match(configs => configs.Any(config => string.Join(' ', config.Select(x => x.UniqueNodeId)).ContainsThese(SUT, MockNodeA, MockNodeB, MockNewNodeC)),
                             $"All node Ids must be present in the Joint Consensus Configuration entry sent to the new Node as well. Thus, at least one entry must be such. ");
 
@@ -873,15 +889,26 @@ namespace Coracle.Raft.Tests.Integration
                     x.Is(Engine.States.Current.CurrentAcessorActivityConstants.Entity, Engine.States.Current.CurrentAcessorActivityConstants.StateChange)
                         && x.Has(Engine.States.Current.CurrentAcessorActivityConstants.newState, nameof(StateValues.Follower))).RemoveOnceMatched();
 
-            var currentTerm = await Context.GetService<IPersistentStateHandler>().GetCurrentTerm();
-            var lastLogIndexOfCurrentTerm = await Context.GetService<IPersistentStateHandler>().GetLastIndex();
-
             #endregion
 
             #region Act
 
             Exception caughtException = null;
             RemoteCallResult<IRequestVoteRPCResponse> requestVoteResponse = null;
+
+            EnqueueAppendEntriesSuccessResponse(MockNodeA);
+            EnqueueAppendEntriesSuccessResponse(MockNewNodeC);
+
+            var heartBeatTimer = Context.GetService<IHeartbeatTimer>() as TestHeartbeatTimer;
+            heartBeatTimer.AwaitedLock.ApproveNext();
+
+            EnqueueAppendEntriesSuccessResponse(MockNodeA);
+            EnqueueAppendEntriesSuccessResponse(MockNewNodeC);
+
+            heartBeatTimer.AwaitedLock.ApproveNext();
+
+            var currentTerm = await Context.GetService<IPersistentStateHandler>().GetCurrentTerm();
+            var lastLogIndexOfCurrentTerm = await Context.GetService<IPersistentStateHandler>().GetLastIndex();
 
             try
             {

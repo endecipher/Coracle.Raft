@@ -37,6 +37,7 @@ using Coracle.Raft.Examples.ClientHandling;
 using Coracle.Raft.Tests.Framework;
 using Coracle.Raft.Tests.Components.Helper;
 using Coracle.Raft.Engine.Actions;
+using Coracle.Raft.Engine.States.LeaderEntities;
 
 namespace Coracle.Raft.Tests.Integration
 {
@@ -90,20 +91,17 @@ namespace Coracle.Raft.Tests.Integration
                 InitializeNode();
                 StartNode();
 
-                EnqueueRequestVoteSuccessResponse(MockNodeA);
-                EnqueueRequestVoteSuccessResponse(MockNodeB);
+                EnqueueMultipleSuccessResponses(MockNodeA);
+                EnqueueMultipleSuccessResponses(MockNodeB);
 
                 var electionTimer = Context.GetService<IElectionTimer>() as TestElectionTimer;
                 //This will make sure that the ElectionTimer callback invocation is approved for the Candidacy
                 electionTimer.AwaitedLock.ApproveNext();
 
-                ////Wait until Majority has been attained
+                //Wait until Majority has been attained
                 majorityAttained.Wait(EventNotificationTimeOut);
 
                 var heartBeatTimer = Context.GetService<IHeartbeatTimer>() as TestHeartbeatTimer;
-
-                EnqueueAppendEntriesSuccessResponse(MockNodeA);
-                EnqueueAppendEntriesSuccessResponse(MockNodeB);
 
                 //This will make sure that the Heartbeat callback invocation is approved for SendAppendEntries
                 heartBeatTimer.AwaitedLock.ApproveNext();
@@ -113,17 +111,12 @@ namespace Coracle.Raft.Tests.Integration
                 var isPronouncedLeaderSelf = Context.GetService<ILeaderNodePronouncer>().IsLeaderRecognized
                     && Context.GetService<ILeaderNodePronouncer>().RecognizedLeaderConfiguration.UniqueNodeId.Equals(SUT);
 
-                await Task.Delay(50);
-
-                EnqueueAppendEntriesSuccessResponse(MockNodeA);
-                EnqueueAppendEntriesSuccessResponse(MockNodeB);
-
-                EnqueueAppendEntriesSuccessResponse(MockNodeA);
-                EnqueueAppendEntriesSuccessResponse(MockNodeB);
+                heartBeatTimer.AwaitedLock.ApproveNext();
 
                 clientHandlingResult = await Context.GetService<ICommandExecutor>()
                     .Execute(Command, CancellationToken.None);
 
+                heartBeatTimer.AwaitedLock.ApproveNext();
                 commitIndexUpdated.Wait(EventNotificationTimeOut);
 
                 captureAfterCommand = new StateCapture(Context.GetService<ICurrentStateAccessor>().Get());
@@ -139,7 +132,7 @@ namespace Coracle.Raft.Tests.Integration
             var assertableQueue = StartAssertions(notifiableQueue);
 
             caughtException
-                .Should().Be(null, $" ");
+                .Should().Be(null);
 
             majorityAttained.IsConditionMatched.Should().BeTrue();
             commitIndexUpdated.IsConditionMatched.Should().BeTrue();
@@ -187,6 +180,10 @@ namespace Coracle.Raft.Tests.Integration
 
             var notifiableQueue = CaptureActivities();
 
+            var updatedIndices = notifiableQueue
+                .AttachNotifier(x =>
+                    x.Is(LeaderVolatileActivityConstants.Entity, LeaderVolatileActivityConstants.UpdatedIndices));
+
             var commitIndexUpdated = notifiableQueue
                 .AttachNotifier(x =>
                     x.Is(AbstractStateActivityConstants.Entity, AbstractStateActivityConstants.ApplyingLogEntry));
@@ -213,19 +210,20 @@ namespace Coracle.Raft.Tests.Integration
             (bool HasSnapshot, ISnapshotHeader Detail) info = (false, null);
 
             var nextIndexToStart = lastIndex + 1;
+            var heartBeatTimer = Context.GetService<IHeartbeatTimer>() as TestHeartbeatTimer;
 
             try
             {
+                EnqueueMultipleSuccessResponses(MockNodeA);
+                EnqueueMultipleSuccessResponses(MockNodeB);
+
                 // Add new commands until threshold surpasses
                 for (int i = (int)nextIndexToStart; i <= (threshold + buffer); i++)
                 {
                     var (Command, Note) = TestAddCommand();
 
-                    EnqueueAppendEntriesSuccessResponse(MockNodeA);
-                    EnqueueAppendEntriesSuccessResponse(MockNodeB);
-
-                    EnqueueAppendEntriesSuccessResponse(MockNodeA);
-                    EnqueueAppendEntriesSuccessResponse(MockNodeB);
+                    // Confirm Replication regardless
+                    heartBeatTimer.AwaitedLock.ApproveNext();
 
                     clientHandlingResult = await Context.GetService<ICommandExecutor>()
                         .Execute(Command, CancellationToken.None);
@@ -238,6 +236,11 @@ namespace Coracle.Raft.Tests.Integration
                         break;
                     }
                 }
+
+                // Confirm Replication regardless
+                heartBeatTimer.AwaitedLock.ApproveNext();
+
+                updatedIndices.Wait(EventNotificationTimeOut);
 
                 captureAfterCommands = new StateCapture(Context.GetService<ICurrentStateAccessor>().Get());
 
@@ -262,17 +265,17 @@ namespace Coracle.Raft.Tests.Integration
             committingFailureEncountered
                 .Should().Be(0);
 
-            captureAfterCommands
-                .CommitIndex
-                .Should().Be(threshold + buffer, $"The commit Index should be 6 or (Threshold: {threshold} + Buffer: {buffer}), as the comands have been replicated to other nodes");
-
-            snapshotBuilt.IsConditionMatched.Should().BeTrue();
-
             info.HasSnapshot.Should().BeTrue();
 
             info.Detail.LastIncludedTerm.Should().Be(captureAfterCommands.CurrentTerm, "Term should be the same, as it has not changed");
 
             info.Detail.LastIncludedIndex.Should().Be(threshold, "The snapshot should encompass the appropriate index");
+
+            captureAfterCommands
+                .CommitIndex
+                .Should().Be(threshold + buffer, $"The commit Index should be 6 or (Threshold: {threshold} + Buffer: {buffer}), as the comands have been replicated to other nodes");
+
+            snapshotBuilt.IsConditionMatched.Should().BeTrue();
 
             (await Context.GetService<IPersistentStateHandler>().FetchLogEntryIndexPreviousToIndex(info.Detail.LastIncludedIndex))
                 .Should()
@@ -335,36 +338,29 @@ namespace Coracle.Raft.Tests.Integration
             Exception caughtException = null;
             ConfigurationChangeResult changeResult = null;
             StateCapture captureAfterConfigurationChange = null;
+            var heartBeatTimer = Context.GetService<IHeartbeatTimer>() as TestHeartbeatTimer;
 
             try
             {
                 /// <remarks>
-                /// Enqueuing Responses for old nodes
-                /// </remarks>
-                EnqueueAppendEntriesSuccessResponse(MockNodeA); //For Replication Approval of C-old,new
-                EnqueueAppendEntriesSuccessResponse(MockNodeB); //For Replication Approval of C-old,new
-
-                EnqueueAppendEntriesSuccessResponse(MockNodeA); //For Replication Approval of C-new
-                EnqueueAppendEntriesSuccessResponse(MockNodeB); //For Replication Approval of C-new
-
-                EnqueueAppendEntriesSuccessResponse(MockNodeA); //For any heartbeats being sent for the C-new entry to be replicated and then applying cluster configuration
-                EnqueueAppendEntriesSuccessResponse(MockNodeB); //For any heartbeats being sent for the C-new entry to be replicated and then applying cluster configuration
-
-                /// <remarks>
-                /// Enqueueing responses for the new node
+                /// Enqueuing Responses for old nodes:
+                /// For Replication Approval of C-old,new;
+                /// For Replication Approval of C-new;
+                /// For any heartbeats being sent for the C-new entry to be replicated and then applying cluster configuration;
+                /// Registering multiple future heartbeats since deposition would be checked via pings;
+                /// 
+                /// Enqueueing responses for the new node <see cref="MockNewNodeC"/>:
+                /// Enqueue Success Responses for each SnapshotChunkRPC for <see cref="MockNewNodeC"/>;
+                /// Enqueue Success AppendEntries for the remaining entries;
+                /// For any heartbeats being sent for the C-new entry to be replicated and then applying cluster configuration;
+                /// Registering multiple future heartbeats since deposition would be checked via pings;
                 /// </remarks>
 
-                for (int i = 0; i <= lastOffset; i++)
-                {
-                    EnqueueInstallSnapshotSuccessResponse(MockNewNodeC); //Enqueue Success Responses for each SnapshotChunkRPC
-                }
+                EnqueueMultipleSuccessResponses(MockNodeA);
+                EnqueueMultipleSuccessResponses(MockNodeB);
+                EnqueueMultipleSuccessResponses(MockNewNodeC);
 
-                EnqueueAppendEntriesSuccessResponse(MockNewNodeC); //Enqueue Success AppendEntries for the remaining entries
-                EnqueueAppendEntriesSuccessResponse(MockNewNodeC); //For any heartbeats being sent for the C-new entry to be replicated and then applying cluster configuration
-
-                EnqueueAppendEntriesSuccessResponse(MockNodeA); //Registering multiple future heartbeats since deposition would be checked via pings
-                EnqueueAppendEntriesSuccessResponse(MockNodeB); //Registering multiple future heartbeats since deposition would be checked via pings
-                EnqueueAppendEntriesSuccessResponse(MockNewNodeC); //Registering multiple future heartbeats since deposition would be checked via pings
+                heartBeatTimer.AwaitedLock.ApproveNext();
 
                 changeResult = await Context.GetService<IConfigurationRequestExecutor>().IssueChange(new ConfigurationChangeRequest
                 {
@@ -373,6 +369,8 @@ namespace Coracle.Raft.Tests.Integration
 
                 }, CancellationToken.None);
 
+                heartBeatTimer.AwaitedLock.ApproveNext();
+
                 successfulInstallation.Wait(EventNotificationTimeOut);
 
                 nodesCaughtUp.Wait(EventNotificationTimeOut);
@@ -380,6 +378,8 @@ namespace Coracle.Raft.Tests.Integration
                 awaitingDepositionStarted.Wait(EventNotificationTimeOut);
 
                 configurationChanged.Wait(EventNotificationTimeOut);
+
+                heartBeatTimer.AwaitedLock.ApproveNext();
 
                 captureAfterConfigurationChange = new StateCapture(Context.GetService<ICurrentStateAccessor>().Get());
             }
@@ -395,7 +395,7 @@ namespace Coracle.Raft.Tests.Integration
             var assertableQueue = StartAssertions(notifiableQueue);
 
             caughtException
-                .Should().Be(null, $" ");
+                .Should().Be(null);
 
             successfulInstallation.IsConditionMatched
                 .Should().BeTrue();

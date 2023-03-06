@@ -46,6 +46,8 @@ namespace Coracle.Raft.Tests.Integration
         public const int MilliSeconds = 1;
         public const int ConfiguredEventProcessorQueueSize = 100;
         public const int ConfiguredEventProcessorWait = 1 * MilliSeconds;
+        public const int ConfiguredRpcEnqueueWaitInterval = 10 * MilliSeconds;
+        public const int ConfiguredRpcEnqueueFailureCounter = 100;
         public TimeSpan EventNotificationTimeOut = TimeSpan.FromSeconds(20);
 
         public EngineConfigurationSettings TestEngineSettings => new EngineConfigurationSettings
@@ -68,11 +70,11 @@ namespace Coracle.Raft.Tests.Integration
             ProcessorQueueSize = ConfiguredEventProcessorQueueSize,
             ProcessorWaitTimeWhenQueueEmpty_InMilliseconds = ConfiguredEventProcessorWait,
 
-            ClientCommandTimeout_InMilliseconds = 100 * MilliSeconds,
+            ClientCommandTimeout_InMilliseconds = 500 * MilliSeconds,
 
             MinElectionTimeout_InMilliseconds = 100 * MilliSeconds,
             MaxElectionTimeout_InMilliseconds = 150 * MilliSeconds,
-            EntryCommitWaitTimeout_InMilliseconds = 100 * MilliSeconds,
+            EntryCommitWaitTimeout_InMilliseconds = 500 * MilliSeconds,
 
             AppendEntriesTimeoutOnSend_InMilliseconds = 5 * Seconds,
             AppendEntriesTimeoutOnReceive_InMilliseconds = 5 * Seconds,
@@ -210,6 +212,16 @@ namespace Coracle.Raft.Tests.Integration
                 ConflictingEntryTermOnFailure = null,
                 Success = true
             }, approveImmediately: true);
+        }
+
+        protected void EnqueueMultipleSuccessResponses(string mockNodeId)
+        {
+            for (int i = 0; i < 1000; i++)
+            {
+                EnqueueAppendEntriesSuccessResponse(mockNodeId);
+                EnqueueRequestVoteSuccessResponse(mockNodeId);
+                EnqueueInstallSnapshotSuccessResponse(mockNodeId);
+            }
         }
 
         protected void EnqueueInstallSnapshotSuccessResponse(string mockNodeId)

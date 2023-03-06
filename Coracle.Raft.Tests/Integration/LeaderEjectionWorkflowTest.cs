@@ -84,20 +84,18 @@ namespace Coracle.Raft.Tests.Integration
                 InitializeNode();
                 StartNode();
 
-                EnqueueRequestVoteSuccessResponse(MockNodeA);
-                EnqueueRequestVoteSuccessResponse(MockNodeB);
+                EnqueueMultipleSuccessResponses(MockNodeA);
+                EnqueueMultipleSuccessResponses(MockNodeB);
 
                 var electionTimer = Context.GetService<IElectionTimer>() as TestElectionTimer;
+
                 //This will make sure that the ElectionTimer callback invocation is approved for the Candidacy
                 electionTimer.AwaitedLock.ApproveNext();
 
-                ////Wait until Majority has been attained
+                //Wait until Majority has been attained
                 majorityAttained.Wait(EventNotificationTimeOut);
 
                 var heartBeatTimer = Context.GetService<IHeartbeatTimer>() as TestHeartbeatTimer;
-
-                EnqueueAppendEntriesSuccessResponse(MockNodeA);
-                EnqueueAppendEntriesSuccessResponse(MockNodeB);
 
                 //This will make sure that the Heartbeat callback invocation is approved for SendAppendEntries
                 heartBeatTimer.AwaitedLock.ApproveNext();
@@ -107,17 +105,14 @@ namespace Coracle.Raft.Tests.Integration
                 var isPronouncedLeaderSelf = Context.GetService<ILeaderNodePronouncer>().IsLeaderRecognized
                     && Context.GetService<ILeaderNodePronouncer>().RecognizedLeaderConfiguration.UniqueNodeId.Equals(SUT);
 
-                await Task.Delay(50);
-
-                EnqueueAppendEntriesSuccessResponse(MockNodeA);
-                EnqueueAppendEntriesSuccessResponse(MockNodeB);
-
-                EnqueueAppendEntriesSuccessResponse(MockNodeA);
-                EnqueueAppendEntriesSuccessResponse(MockNodeB);
+                //Send parallel heartbeats for partial simulation of a real scenario
+                heartBeatTimer.AwaitedLock.ApproveNext();
 
                 clientHandlingResult = await Context.GetService<ICommandExecutor>()
                     .Execute(Command, CancellationToken.None);
 
+                //Send parallel heartbeats for partial simulation of a real scenario
+                heartBeatTimer.AwaitedLock.ApproveNext();
                 commitIndexUpdated.Wait(EventNotificationTimeOut);
 
                 captureAfterCommand = new StateCapture(Context.GetService<ICurrentStateAccessor>().Get());
