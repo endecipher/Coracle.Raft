@@ -22,6 +22,7 @@
 
 using Coracle.Raft.Engine.Configuration.Cluster;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace Coracle.Raft.Engine.Configuration.Alterations
 {
@@ -33,7 +34,7 @@ namespace Coracle.Raft.Engine.Configuration.Alterations
 
         IEnumerable<NodeChangeConfiguration> CalculateJointConsensusConfigurationWith(IEnumerable<NodeConfiguration> newConfiguration);
 
-        void ChangeMembership(MembershipUpdateEvent membershipChange, bool tryForReplication = false, bool isInstallingSnapshot = false);
+        void ChangeMembership(MembershipUpdateEvent membershipChange, bool tryForReplication = false, CancellationToken? cancellationToken = null, bool isInstallingSnapshot = false);
 
         bool HasNodeBeenRemoved(string externalNodeId);
 

@@ -203,6 +203,8 @@ namespace Coracle.Raft.Engine.Actions
                     {
                         lastPings = newPings;
                     }
+
+                    (CurrentStateAccessor.Get() as Leader).AppendEntriesManager.InitiateAppendEntries();
                 }
             }
         }

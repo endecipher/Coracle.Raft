@@ -31,6 +31,7 @@ using System.Linq;
 using Coracle.Raft.Engine.Node;
 using Coracle.Raft.Engine.Actions;
 using Coracle.Raft.Engine.Actions.Core;
+using System.Threading;
 
 namespace Coracle.Raft.Engine.Configuration.Alterations
 {
@@ -45,6 +46,7 @@ namespace Coracle.Raft.Engine.Configuration.Alterations
 
         #endregion
 
+        
         public MembershipChanger(
             IClusterConfiguration clusterConfiguration,
             ILeaderNodePronouncer leaderNodePronouncer,
@@ -77,7 +79,7 @@ namespace Coracle.Raft.Engine.Configuration.Alterations
         /// Whenever a node receives a log entry (which is a LogEntry of type Configuration), they would apply it to their node immediately.
         /// This implementation is how the Node's cluster configuration changes.
         /// </summary>
-        public void ChangeMembership(MembershipUpdateEvent membershipChange, bool tryForReplication = false, bool isInstallingSnapshot = false)
+        public void ChangeMembership(MembershipUpdateEvent membershipChange, bool tryForReplication = false, CancellationToken? cancellationToken = null, bool isInstallingSnapshot = false)
         {
             ActivityLogger?.Log(new CoracleActivity
             {
@@ -138,13 +140,13 @@ namespace Coracle.Raft.Engine.Configuration.Alterations
             else
             {
 
-                if (isThisNodeLeader && tryForReplication)
+                if (isThisNodeLeader && tryForReplication && cancellationToken.HasValue)
                 {
                     /// Wait for replication/heartbeat. 
                     /// This will try to attempt to ensure that the nodes scheduled for replication (if available), also get the conf C-new entry replicated. 
                     /// The abandoning nodes who would still be up, might have the C-new entry replicated which would help them decommission properly. 
                     /// This wouldn't take too long, as it should take as much time as a heartbeat
-                    GlobalAwaiter.AwaitNoDeposition(System.Threading.CancellationToken.None);
+                    GlobalAwaiter.AwaitNoDeposition(cancellationToken.Value);
                 }
 
                 /// Update configuration manually

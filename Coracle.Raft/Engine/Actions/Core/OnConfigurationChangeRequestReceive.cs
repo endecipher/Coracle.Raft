@@ -261,7 +261,7 @@ namespace Coracle.Raft.Engine.Actions.Core
                 Configuration = Input.ConfigurationChange.NewConfiguration,
                 ConfigurationLogEntryIndex = newConfigurationLogEntry.CurrentIndex,
             }, 
-            tryForReplication: true);
+            tryForReplication: true, cancellationToken: cancellationToken);
 
             ActivityLogger?.Log(new CoracleActivity
             {

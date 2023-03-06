@@ -46,7 +46,7 @@ namespace Coracle.Raft.Tests.Integration
         public const int MilliSeconds = 1;
         public const int ConfiguredEventProcessorQueueSize = 100;
         public const int ConfiguredEventProcessorWait = 1 * MilliSeconds;
-        public TimeSpan EventNotificationTimeOut = TimeSpan.FromSeconds(200);
+        public TimeSpan EventNotificationTimeOut = TimeSpan.FromSeconds(20);
 
         public EngineConfigurationSettings TestEngineSettings => new EngineConfigurationSettings
         {
@@ -81,7 +81,7 @@ namespace Coracle.Raft.Tests.Integration
             RequestVoteTimeoutOnReceive_InMilliseconds = 10 * Seconds,
 
             CatchUpOfNewNodesTimeout_InMilliseconds = 10 * Seconds,
-            ConfigurationChangeHandleTimeout_InMilliseconds = 30 * Seconds,
+            ConfigurationChangeHandleTimeout_InMilliseconds = 20 * Seconds,
 
             CompactionWaitPeriod_InMilliseconds = 1 * Seconds,
             InstallSnapshotChunkTimeoutOnReceive_InMilliseconds = 10 * Seconds,

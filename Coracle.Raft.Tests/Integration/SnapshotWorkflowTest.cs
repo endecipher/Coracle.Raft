@@ -36,6 +36,7 @@ using Coracle.Raft.Examples.Data;
 using Coracle.Raft.Examples.ClientHandling;
 using Coracle.Raft.Tests.Framework;
 using Coracle.Raft.Tests.Components.Helper;
+using Coracle.Raft.Engine.Actions;
 
 namespace Coracle.Raft.Tests.Integration
 {
@@ -58,7 +59,7 @@ namespace Coracle.Raft.Tests.Integration
         [Order(1)]
         public async Task IsTurningToLeader()
         {
-            //Arrange
+            #region Arrange
             Context.GetService<IActivityMonitor<Activity>>().Start();
 
             var notifiableQueue = CaptureActivities();
@@ -75,8 +76,9 @@ namespace Coracle.Raft.Tests.Integration
                     x.Is(AbstractStateActivityConstants.Entity, AbstractStateActivityConstants.ApplyingLogEntry));
 
             StateCapture captureAfterCommand = null;
+            #endregion
 
-            //Act
+            #region Act
             try
             {
                 InitializeEngineConfiguration();
@@ -127,6 +129,7 @@ namespace Coracle.Raft.Tests.Integration
             {
                 caughtException = e;
             }
+            #endregion
 
             #region Assertions
 
@@ -275,9 +278,9 @@ namespace Coracle.Raft.Tests.Integration
 
             var notifiableQueue = CaptureActivities();
 
-            var commitIndexUpdated = notifiableQueue
+            var awaitingDepositionStarted = notifiableQueue
                 .AttachNotifier(x =>
-                    x.Is(AbstractStateActivityConstants.Entity, AbstractStateActivityConstants.ApplyingLogEntry)).RemoveOnceMatched();
+                    x.Is(GlobalAwaiter.Entity, GlobalAwaiter.AwaitingNoDeposition)).RemoveOnceMatched();
 
             var configurationChanged = notifiableQueue
                 .AttachNotifier(x =>
@@ -346,6 +349,13 @@ namespace Coracle.Raft.Tests.Integration
                 EnqueueAppendEntriesSuccessResponse(MockNewNodeC); //Enqueue Success AppendEntries for the remaining entries
                 EnqueueAppendEntriesSuccessResponse(MockNewNodeC); //For any heartbeats being sent for the C-new entry to be replicated and then applying cluster configuration
 
+                for (int i = 0; i < 50; i++) 
+                {
+                    EnqueueAppendEntriesSuccessResponse(MockNodeA); //Registerng multiple future heartbeats since deposition would be checked via pings
+                    EnqueueAppendEntriesSuccessResponse(MockNodeB); //Registerng multiple future heartbeats since deposition would be checked via pings
+                    EnqueueAppendEntriesSuccessResponse(MockNewNodeC); //Registerng multiple future heartbeats since deposition would be checked via pings
+                }
+
                 changeResult = await Context.GetService<IConfigurationRequestExecutor>().IssueChange(new ConfigurationChangeRequest
                 {
                     UniqueRequestId = Guid.NewGuid().ToString(),
@@ -356,6 +366,8 @@ namespace Coracle.Raft.Tests.Integration
                 successfulInstallation.Wait(EventNotificationTimeOut);
 
                 nodesCaughtUp.Wait(EventNotificationTimeOut);
+
+                awaitingDepositionStarted.Wait(EventNotificationTimeOut);
 
                 configurationChanged.Wait(EventNotificationTimeOut);
 
@@ -374,6 +386,18 @@ namespace Coracle.Raft.Tests.Integration
 
             caughtException
                 .Should().Be(null, $" ");
+
+            successfulInstallation.IsConditionMatched
+                .Should().BeTrue();
+
+            nodesCaughtUp.IsConditionMatched
+                .Should().BeTrue();
+
+            awaitingDepositionStarted.IsConditionMatched
+                .Should().BeTrue();
+
+            configurationChanged.IsConditionMatched
+                .Should().BeTrue();
 
             Context.NodeContext.GetMockNode(MockNewNodeC).InstallSnapshotLock.RemoteCalls.Count
                 .Should().Be(lastOffset + 1, "As, if the last offset is 1, then there should be 2 calls (one for 0 offset and one for 1 offset)");
