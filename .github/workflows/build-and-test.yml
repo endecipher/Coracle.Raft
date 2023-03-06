@@ -22,16 +22,21 @@ jobs:
         dotnet-version: 6.0.x  
     - name: Build Solution
       run: dotnet build --configuration Release --verbosity normal
-    - name: Workflow Test - Candidacy, Elections, Leader Establishment, Command Handling, Configuration Changes etc
+    - name: Test - Candidacy, Elections, Leader Establishment, Command Handling, Configuration Changes etc
       run: dotnet test --logger trx --results-directory "CandidacyAndLeaderWorkflowTestResults-${{ matrix.os }}" --filter FullyQualifiedName~CandidacyAndLeaderWorkflowTest
-    - name: Workflow Test - Candidacy, Elections, Leader Establishment, Command Handling, Configuration Changes etc
+      if: ${{ always() }}
+    - name: Test - Follower replication, snapshot installation etc
       run: dotnet test --logger trx --results-directory "FollowerWorkflowTestResults-${{ matrix.os }}" --filter FullyQualifiedName~FollowerWorkflowTest
-    - name: Workflow Test - Candidacy, Elections, Leader Establishment, Command Handling, Configuration Changes etc
+      if: ${{ always() }}
+    - name: Test - Configuration Changes involving leader decommission, etc 
       run: dotnet test --logger trx --results-directory "LeaderEjectionWorkflowTestResults-${{ matrix.os }}" --filter FullyQualifiedName~LeaderEjectionWorkflowTest
-    - name: Workflow Test - Candidacy, Elections, Leader Establishment, Command Handling, Configuration Changes etc
+      if: ${{ always() }}
+    - name: Test - Log Chain Operations, Data manipulations, etc
       run: dotnet test --logger trx --results-directory "LogHolderWorkflowTestResults-${{ matrix.os }}" --filter FullyQualifiedName~LogHolderWorkflowTest
-    - name: Workflow Test - Candidacy, Elections, Leader Establishment, Command Handling, Configuration Changes etc
+      if: ${{ always() }}
+    - name: Test - Compaction eligibility, Merging of LogEntries and Snapshot creation, etc
       run: dotnet test --logger trx --results-directory "SnapshotWorkflowTestResults-${{ matrix.os }}" --filter FullyQualifiedName~SnapshotWorkflowTest
+      if: ${{ always() }}
     - name: Upload Test Results
       uses: actions/upload-artifact@v3
       with:
