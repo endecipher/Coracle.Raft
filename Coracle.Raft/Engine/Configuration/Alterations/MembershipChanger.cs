@@ -167,7 +167,7 @@ namespace Coracle.Raft.Engine.Configuration.Alterations
             {
                 EntitySubject = Entity,
                 Event = JointConsensusTriggered,
-                Level = ActivityLogLevel.Debug
+                Level = ActivityLogLevel.Information
             }
             .WithCallerInfo());
 

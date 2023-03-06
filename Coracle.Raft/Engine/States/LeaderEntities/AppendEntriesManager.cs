@@ -168,6 +168,8 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
 
         public const string Entity = nameof(AppendEntriesManager);
         public const string Initiate = nameof(Initiate);
+        public const string InitiationCancelled = nameof(InitiationCancelled);
+        public const string InitiationException = nameof(InitiationException);
         public const string InitiateSnapshot = nameof(InitiateSnapshot);
         public const string OngoingSnapshotExists = nameof(OngoingSnapshotExists);
         public const string Initializing = nameof(Initializing);
@@ -175,6 +177,7 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
         public const string nodesToAdd = nameof(nodesToAdd);
         public const string nodesToRemove = nameof(nodesToRemove);
         public const string snapshotDetails = nameof(snapshotDetails);
+        public const string exception = nameof(exception);
 
         #endregion
 
@@ -314,21 +317,47 @@ namespace Coracle.Raft.Engine.States.LeaderEntities
 
             var nodesForInstallation = (await (state as Leader).LeaderProperties.RequiresSnapshot());
 
-            Parallel.ForEach(source: CurrentPeers.Values, body: (nodeDetails) =>
+            try
             {
-                if (nodesForInstallation != null && nodesForInstallation.TryGetValue(nodeDetails.NodeConfiguration.UniqueNodeId, out var snapshot))
+
+                Parallel.ForEach(source: CurrentPeers.Values, body: (nodeDetails) =>
                 {
-                    InitiateSnapshotInstallation(nodeDetails.NodeConfiguration.UniqueNodeId, snapshot).GetAwaiter().GetResult();
-                }
-                else
+                    if (nodesForInstallation != null && nodesForInstallation.TryGetValue(nodeDetails.NodeConfiguration.UniqueNodeId, out var snapshot))
+                    {
+                        InitiateSnapshotInstallation(nodeDetails.NodeConfiguration.UniqueNodeId, snapshot).GetAwaiter().GetResult();
+                    }
+                    else
+                    {
+                        SendAppendEntriesToNode(nodeDetails, state);
+                    }
+                },
+                parallelOptions: new ParallelOptions
                 {
-                    SendAppendEntriesToNode(nodeDetails, state);
-                }
-            },
-            parallelOptions: new ParallelOptions
+                    CancellationToken = Responsibilities.GlobalCancellationToken,
+                });
+            }
+            catch (Exception ex) when (ex is OperationCanceledException || ex is TaskCanceledException)
             {
-                CancellationToken = Responsibilities.GlobalCancellationToken,
-            });
+                ActivityLogger?.Log(new CoracleActivity
+                {
+                    EntitySubject = Entity,
+                    Event = InitiationCancelled,
+                    Level = ActivityLogLevel.Error,
+                }
+                .With(ActivityParam.New(exception, ex))
+                .WithCallerInfo());
+            }
+            catch (Exception ex)
+            {
+                ActivityLogger?.Log(new CoracleActivity
+                {
+                    EntitySubject = Entity,
+                    Event = InitiationException,
+                    Level = ActivityLogLevel.Error,
+                }
+                .With(ActivityParam.New(exception, ex))
+                .WithCallerInfo());
+            }
         }
 
         private void SendAppendEntriesToNode(NodeDetails nodeDetails, IStateDevelopment state)

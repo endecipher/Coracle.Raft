@@ -137,7 +137,7 @@ namespace Coracle.Raft.Engine.States
                     Description = $"New Commit Index cannot be lesser than/equal to the old one",
                     EntitySubject = AbstractStateActivityConstants.Entity,
                     Event = AbstractStateActivityConstants.ApplyingLogEntry,
-                    Level = ActivityLogLevel.Error,
+                    Level = ActivityLogLevel.Information,
 
                 }
                 .With(ActivityParam.New(AbstractStateActivityConstants.newCommitIndex, indexToAssignAsCommitIndex))
@@ -319,7 +319,7 @@ namespace Coracle.Raft.Engine.States
             {
                 EntitySubject = AbstractStateActivityConstants.Entity,
                 Event = AbstractStateActivityConstants.Stopping,
-                Level = ActivityLogLevel.Debug,
+                Level = ActivityLogLevel.Information,
             }
             .With(ActivityParam.New(AbstractStateActivityConstants.newState, StateValue.ToString()))
             .WithCallerInfo());
@@ -338,7 +338,7 @@ namespace Coracle.Raft.Engine.States
             {
                 EntitySubject = AbstractStateActivityConstants.Entity,
                 Event = AbstractStateActivityConstants.Resuming,
-                Level = ActivityLogLevel.Debug,
+                Level = ActivityLogLevel.Information,
             }
             .With(ActivityParam.New(AbstractStateActivityConstants.newState, StateValue.ToString()))
             .WithCallerInfo());
@@ -360,7 +360,7 @@ namespace Coracle.Raft.Engine.States
             {
                 EntitySubject = AbstractStateActivityConstants.Entity,
                 Event = AbstractStateActivityConstants.Decommissioning,
-                Level = ActivityLogLevel.Debug,
+                Level = ActivityLogLevel.Information,
             }
             .With(ActivityParam.New(AbstractStateActivityConstants.newState, StateValue.ToString()))
             .WithCallerInfo());

@@ -87,7 +87,7 @@ namespace Coracle.Raft.Engine.Actions.Core
                 {
                     EntitySubject = UniqueName,
                     Event = NodesCaughtUp,
-                    Level = ActivityLogLevel.Debug,
+                    Level = ActivityLogLevel.Information,
                 }
                 .With(ActivityParam.New(nodesToCheck, Input.NodesToCheck))
                 .WithCallerInfo());

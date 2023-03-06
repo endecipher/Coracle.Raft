@@ -164,10 +164,9 @@ namespace Coracle.Raft.Engine.States
                 {
                     ActivityLogger?.Log(new CoracleActivity
                     {
-                        Description = $"State change from {oldStateValue} to {typename} failed",
                         EntitySubject = StateChangerEntity,
                         Event = FailedToChangeStateDueToInvalidRoute,
-                        Level = ActivityLogLevel.Debug,
+                        Level = ActivityLogLevel.Error,
 
                     }
                     .With(ActivityParam.New(StateChanger.oldStateValue, oldStateValue.ToString()))

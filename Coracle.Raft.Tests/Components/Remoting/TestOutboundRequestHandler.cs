@@ -51,7 +51,7 @@ namespace Coracle.Raft.Tests.Components.Remoting
 
         public Task<RemoteCallResult<IAppendEntriesRPCResponse>> Send(IAppendEntriesRPC callObject, INodeConfiguration configuration, CancellationToken cancellationToken)
         {
-            ActivityLogger.Log(new ImplActivity
+            ActivityLogger?.Log(new ImplActivity
             {
                 EntitySubject = TestRemoteManagerEntity,
                 Event = OutboundAppendEntriesRPC,
@@ -77,7 +77,7 @@ namespace Coracle.Raft.Tests.Components.Remoting
 
         public Task<RemoteCallResult<IRequestVoteRPCResponse>> Send(IRequestVoteRPC callObject, INodeConfiguration configuration, CancellationToken cancellationToken)
         {
-            ActivityLogger.Log(new ImplActivity
+            ActivityLogger?.Log(new ImplActivity
             {
                 EntitySubject = TestRemoteManagerEntity,
                 Event = OutboundRequestVoteRPC,
@@ -103,7 +103,7 @@ namespace Coracle.Raft.Tests.Components.Remoting
 
         public Task<RemoteCallResult<IInstallSnapshotRPCResponse>> Send(IInstallSnapshotRPC callObject, INodeConfiguration configuration, CancellationToken cancellationToken)
         {
-            ActivityLogger.Log(new ImplActivity
+            ActivityLogger?.Log(new ImplActivity
             {
                 EntitySubject = TestRemoteManagerEntity,
                 Event = OutboundInstallSnapshotRPC,

@@ -67,7 +67,7 @@ namespace Coracle.Raft.Engine.States
                     Description = $"State changed to {value.StateValue}",
                     EntitySubject = Current.CurrentAcessorActivityConstants.Entity,
                     Event = Current.CurrentAcessorActivityConstants.StateChange,
-                    Level = ActivityLogLevel.Debug,
+                    Level = ActivityLogLevel.Information,
 
                 }
                 .With(ActivityParam.New(Current.CurrentAcessorActivityConstants.newState, value.StateValue.ToString()))

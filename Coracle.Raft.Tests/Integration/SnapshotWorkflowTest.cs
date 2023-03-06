@@ -349,12 +349,9 @@ namespace Coracle.Raft.Tests.Integration
                 EnqueueAppendEntriesSuccessResponse(MockNewNodeC); //Enqueue Success AppendEntries for the remaining entries
                 EnqueueAppendEntriesSuccessResponse(MockNewNodeC); //For any heartbeats being sent for the C-new entry to be replicated and then applying cluster configuration
 
-                for (int i = 0; i < 50; i++) 
-                {
-                    EnqueueAppendEntriesSuccessResponse(MockNodeA); //Registerng multiple future heartbeats since deposition would be checked via pings
-                    EnqueueAppendEntriesSuccessResponse(MockNodeB); //Registerng multiple future heartbeats since deposition would be checked via pings
-                    EnqueueAppendEntriesSuccessResponse(MockNewNodeC); //Registerng multiple future heartbeats since deposition would be checked via pings
-                }
+                EnqueueAppendEntriesSuccessResponse(MockNodeA); //Registering multiple future heartbeats since deposition would be checked via pings
+                EnqueueAppendEntriesSuccessResponse(MockNodeB); //Registering multiple future heartbeats since deposition would be checked via pings
+                EnqueueAppendEntriesSuccessResponse(MockNewNodeC); //Registering multiple future heartbeats since deposition would be checked via pings
 
                 changeResult = await Context.GetService<IConfigurationRequestExecutor>().IssueChange(new ConfigurationChangeRequest
                 {

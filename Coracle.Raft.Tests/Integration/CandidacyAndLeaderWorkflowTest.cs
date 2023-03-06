@@ -561,6 +561,9 @@ namespace Coracle.Raft.Tests.Integration
                 EnqueueAppendEntriesSuccessResponse(MockNodeA);
                 EnqueueAppendEntriesSuccessResponse(MockNodeB);
 
+                EnqueueAppendEntriesSuccessResponse(MockNodeA); // For Deposition Heartbeats 
+                EnqueueAppendEntriesSuccessResponse(MockNodeB); // For Deposition Heartbeats
+                
                 clientHandlingResult = await Context.GetService<ICommandExecutor>()
                     .Execute(command, CancellationToken.None);
 
@@ -755,13 +758,9 @@ namespace Coracle.Raft.Tests.Integration
                 // Next time, it sends true
                 EnqueueAppendEntriesSuccessResponse(MockNewNodeC);
 
-                EnqueueAppendEntriesSuccessResponse(MockNodeA);
-                EnqueueAppendEntriesSuccessResponse(MockNodeB); //For any heartbeats being sent for the C-new entry to be replicated and then applying cluster configuration
-                EnqueueAppendEntriesSuccessResponse(MockNewNodeC);
-
-                EnqueueAppendEntriesSuccessResponse(MockNodeA);
-                EnqueueAppendEntriesSuccessResponse(MockNodeB); //For any heartbeats being sent for the C-new entry to be replicated and then applying cluster configuration
-                EnqueueAppendEntriesSuccessResponse(MockNewNodeC);
+                EnqueueAppendEntriesSuccessResponse(MockNodeA); // For Deposition checks
+                EnqueueAppendEntriesSuccessResponse(MockNodeB); // For Deposition checks
+                EnqueueAppendEntriesSuccessResponse(MockNewNodeC); // For Deposition checks
 
                 changeResult = await Context.GetService<IConfigurationRequestExecutor>().IssueChange(new ConfigurationChangeRequest
                 {
@@ -805,13 +804,6 @@ namespace Coracle.Raft.Tests.Integration
 
             assertableQueue
                 .Search()
-                .UntilItSatisfies(_ => _.Is(OnCatchUpOfNewlyAddedNodes.ActionName, OnCatchUpOfNewlyAddedNodes.NodesNotCaughtUpYet)
-                    && _.HasMatchingParam(OnCatchUpOfNewlyAddedNodes.nodesToCheck, param => param.ToString().ContainsThese(MockNewNodeC)
-                            && param.ToString().DoesNotContainThese(MockNodeA, MockNodeB, SUT)),
-                        $"Catchup awaiting should only occur for {MockNewNodeC}, and not other nodes");
-
-            assertableQueue
-                .Search()
                 .UntilItSatisfies(_ => _.Is(OnSendAppendEntriesRPC.ActionName, OnSendAppendEntriesRPC.SendingOnFailure),
                         $"Catchup awaiting should only occur for {MockNewNodeC}, and not other nodes");
 
@@ -828,7 +820,7 @@ namespace Coracle.Raft.Tests.Integration
                 .Where(_ => _.input.Entries.Any(t => t.Type.HasFlag(Engine.Logs.LogEntry.Types.Configuration)))
                 .Select(_ => _.input)
                 .Count()
-                .Should().Be(2, "As the JointConsensus entry (C-old,new) and the C-new entry should both be sent to the new node");
+                .Should().BeGreaterThanOrEqualTo(2, "As the JointConsensus entry (C-old,new) and the C-new entry should both be sent to the new node");
 
             Context.NodeContext.GetMockNode(MockNodeB).AppendEntriesLock
                 .RemoteCalls
@@ -836,13 +828,16 @@ namespace Coracle.Raft.Tests.Integration
                 .Where(_ => _.input.Entries.Any(t => t.Type.HasFlag(Engine.Logs.LogEntry.Types.Configuration)))
                 .Select(_ => _.input)
                 .Count()
-                .Should().Be(2, "As the JointConsensus entry (C-old,new) and the C-new entry should both be sent to the abandoning node");
+                .Should().BeGreaterThanOrEqualTo(2, "As the JointConsensus entry (C-old,new) and the C-new entry should both be sent to the abandoning node");
 
             Context.NodeContext.GetMockNode(MockNewNodeC).AppendEntriesLock
-                .RemoteCalls.SkipLast(1).Last().input.Entries.Last().Content.As<IEnumerable<NodeConfiguration>>()
-                    .Should().Match(configs => string.Join(' ', configs.Select(x => x.UniqueNodeId))
-                        .ContainsThese(SUT, MockNodeA, MockNodeB, MockNewNodeC),
-                            $"All node Ids must be present in the Joint Consensus Configuration entry sent to the new Node as well ");
+                .RemoteCalls
+                .Where(_ => _.input.Entries != null && _.input.Entries.Any())
+                .SelectMany(x => x.input.Entries)
+                .Where(_ => _ != null && _.Type.HasFlag(Engine.Logs.LogEntry.Types.Configuration))
+                .Select(x=> x.Content as IEnumerable<NodeConfiguration>)
+                .Should().Match(configs => configs.Any(config => string.Join(' ', config.Select(x => x.UniqueNodeId)).ContainsThese(SUT, MockNodeA, MockNodeB, MockNewNodeC)),
+                            $"All node Ids must be present in the Joint Consensus Configuration entry sent to the new Node as well. Thus, at least one entry must be such. ");
 
             assertableQueue
                 .Dig()

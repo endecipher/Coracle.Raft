@@ -92,11 +92,11 @@ namespace Coracle.Raft.Engine.States
 
             await PersistentState.SetVotedFor(EngineConfiguration.NodeId);
 
-            ActivityLogger.Log(new CoracleActivity
+            ActivityLogger?.Log(new CoracleActivity
             {
                 EntitySubject = Entity,
                 Event = StartingElection,
-                Level = ActivityLogLevel.Debug
+                Level = ActivityLogLevel.Information
             }
             .With(ActivityParam.New(incrementedTerm, term))
             .WithCallerInfo());

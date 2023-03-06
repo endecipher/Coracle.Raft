@@ -96,7 +96,7 @@ namespace Coracle.Raft.Engine.States
             {
                 EntitySubject = Volatile.ActivityConstants.Entity,
                 Event = Volatile.ActivityConstants.VolatileChange,
-                Level = ActivityLogLevel.Debug
+                Level = ActivityLogLevel.Verbose
             }
             .With(ActivityParam.New(Volatile.ActivityConstants.lastApplied, _lastApplied))
             .With(ActivityParam.New(Volatile.ActivityConstants.commitIndex, _commitIndex))

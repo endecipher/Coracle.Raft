@@ -149,7 +149,7 @@ namespace Coracle.Raft.Engine.Node
                     {
                         EntitySubject = Entity,
                         Event = Initialized,
-                        Level = ActivityLogLevel.Debug
+                        Level = ActivityLogLevel.Information
                     }
                     .With(ActivityParam.New(nodeId, EngineConfiguration.NodeId))
                     .WithCallerInfo());
@@ -181,7 +181,7 @@ namespace Coracle.Raft.Engine.Node
             {
                 EntitySubject = Entity,
                 Event = Started,
-                Level = ActivityLogLevel.Debug
+                Level = ActivityLogLevel.Information
             }
             .With(ActivityParam.New(nodeId, EngineConfiguration.NodeId))
             .WithCallerInfo());

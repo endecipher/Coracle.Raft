@@ -82,7 +82,7 @@ namespace Coracle.Raft.Engine.Actions.Core
                 {
                     EntitySubject = UniqueName,
                     Event = LogCompacted,
-                    Level = ActivityLogLevel.Debug,
+                    Level = ActivityLogLevel.Information,
                 }
                 .With(ActivityParam.New(OnCompaction.snapshot, snapshot))
                 .WithCallerInfo());

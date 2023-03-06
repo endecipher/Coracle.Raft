@@ -102,7 +102,7 @@ namespace Coracle.Raft.Engine.Actions.Core
                     Description = $"Leader Node Configuration not found. Retrying..",
                     EntitySubject = ActionName,
                     Event = RetryingAsLeaderNodeNotFound,
-                    Level = ActivityLogLevel.Debug,
+                    Level = ActivityLogLevel.Information,
 
                 }
                 .With(ActivityParam.New(commandId, Input.ConfigurationChange.UniqueRequestId))
@@ -149,7 +149,7 @@ namespace Coracle.Raft.Engine.Actions.Core
                     Description = $"Current State Value is {Input.State.StateValue}. Forwarding to Leader..",
                     EntitySubject = ActionName,
                     Event = ForwardingCommandToLeader,
-                    Level = ActivityLogLevel.Debug,
+                    Level = ActivityLogLevel.Information,
                 }
                 .With(ActivityParam.New(commandId, Input.ConfigurationChange.UniqueRequestId))
                 .With(ActivityParam.New(currentState, Input.State.StateValue.ToString()))

@@ -93,7 +93,7 @@ namespace Coracle.Raft.Examples.Data
             {
                 EntitySubject = Entity,
                 Event = eventString,
-                Level = ActivityLogLevel.Debug,
+                Level = ActivityLogLevel.Verbose,
             }
             .With(ActivityParam.New(CurrentTermValue, CurrentTerm))
             .With(ActivityParam.New(VotedForValue, VotedFor))
@@ -486,7 +486,7 @@ namespace Coracle.Raft.Examples.Data
             {
                 EntitySubject = EntityLog,
                 Event = eventString,
-                Level = ActivityLogLevel.Debug,
+                Level = ActivityLogLevel.Verbose,
             }
             .With(ActivityParam.New(logChain, GetLogChainEntries()))
             .WithCallerInfo());
