@@ -1,0 +1,49 @@
+name: Coracle.Raft - Project Build and Integration Testing
+on:
+  push:
+  pull_request:
+    branches: [ "main" ]
+    paths:
+    - '**.cs'
+    - '**.csproj'
+jobs:
+  build:
+    name: build-${{matrix.os}}
+    runs-on: ${{ matrix.os }}
+    if: ${{ always() }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+    - uses: actions/checkout@v3
+    - name: Setup .NET Core
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: 6.0.x  
+    - name: Build Solution
+      run: dotnet build --configuration Release --verbosity normal
+    - name: Workflow Test - Candidacy, Elections, Leader Establishment, Command Handling, Configuration Changes etc
+      run: dotnet test --logger trx --results-directory "CandidacyAndLeaderWorkflowTestResults-${{ matrix.os }}" --filter FullyQualifiedName~CandidacyAndLeaderWorkflowTest
+    - name: Workflow Test - Candidacy, Elections, Leader Establishment, Command Handling, Configuration Changes etc
+      run: dotnet test --logger trx --results-directory "FollowerWorkflowTestResults-${{ matrix.os }}" --filter FullyQualifiedName~FollowerWorkflowTest
+    - name: Workflow Test - Candidacy, Elections, Leader Establishment, Command Handling, Configuration Changes etc
+      run: dotnet test --logger trx --results-directory "LeaderEjectionWorkflowTestResults-${{ matrix.os }}" --filter FullyQualifiedName~LeaderEjectionWorkflowTest
+    - name: Workflow Test - Candidacy, Elections, Leader Establishment, Command Handling, Configuration Changes etc
+      run: dotnet test --logger trx --results-directory "LogHolderWorkflowTestResults-${{ matrix.os }}" --filter FullyQualifiedName~LogHolderWorkflowTest
+    - name: Workflow Test - Candidacy, Elections, Leader Establishment, Command Handling, Configuration Changes etc
+      run: dotnet test --logger trx --results-directory "SnapshotWorkflowTestResults-${{ matrix.os }}" --filter FullyQualifiedName~SnapshotWorkflowTest
+    - name: Upload Test Results
+      uses: actions/upload-artifact@v3
+      with:
+        name: dotnet-results-${{ matrix.os }}
+        path: | 
+          CandidacyAndLeaderWorkflowTestResults-${{ matrix.os }} 
+          FollowerWorkflowTestResults-${{ matrix.os }} 
+          LeaderEjectionWorkflowTestResults-${{ matrix.os }} 
+          LogHolderWorkflowTestResults-${{ matrix.os }} 
+          SnapshotWorkflowTestResults-${{ matrix.os }} 
+        retention-days: 5
+      if: ${{ always() }}
+    - name: Download All Workflow Run Artifacts
+      uses: actions/download-artifact@v3
+      if: ${{ always() }}
