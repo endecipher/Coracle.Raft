@@ -74,20 +74,20 @@ namespace Coracle.Raft.Tests.Integration
             MaxElectionTimeout_InMilliseconds = 150 * MilliSeconds,
             EntryCommitWaitTimeout_InMilliseconds = 100 * MilliSeconds,
 
-            AppendEntriesTimeoutOnSend_InMilliseconds = 10 * Seconds,
-            AppendEntriesTimeoutOnReceive_InMilliseconds = 10 * Seconds,
+            AppendEntriesTimeoutOnSend_InMilliseconds = 5 * Seconds,
+            AppendEntriesTimeoutOnReceive_InMilliseconds = 5 * Seconds,
 
-            RequestVoteTimeoutOnSend_InMilliseconds = 10 * Seconds,
-            RequestVoteTimeoutOnReceive_InMilliseconds = 10 * Seconds,
+            RequestVoteTimeoutOnSend_InMilliseconds = 5 * Seconds,
+            RequestVoteTimeoutOnReceive_InMilliseconds = 5 * Seconds,
 
             CatchUpOfNewNodesTimeout_InMilliseconds = 10 * Seconds,
-            ConfigurationChangeHandleTimeout_InMilliseconds = 20 * Seconds,
+            ConfigurationChangeHandleTimeout_InMilliseconds = 15 * Seconds,
 
             CompactionWaitPeriod_InMilliseconds = 1 * Seconds,
-            InstallSnapshotChunkTimeoutOnReceive_InMilliseconds = 10 * Seconds,
-            InstallSnapshotChunkTimeoutOnSend_InMilliseconds = 10 * Seconds,
+            InstallSnapshotChunkTimeoutOnReceive_InMilliseconds = 5 * Seconds,
+            InstallSnapshotChunkTimeoutOnSend_InMilliseconds = 5 * Seconds,
 
-            CompactionAttemptInterval_InMilliseconds = 100 * MilliSeconds,
+            CompactionAttemptInterval_InMilliseconds = 10 * MilliSeconds,
             CompactionAttemptTimeout_InMilliseconds = 10 * Seconds,
 
             SnapshotThresholdSize = 5,
@@ -184,7 +184,12 @@ namespace Coracle.Raft.Tests.Integration
         {
             var monitor = Context.GetService<IActivityMonitor<Activity>>();
 
-            monitor.ClearAllQueues();
+            monitor?.ClearAllQueues();
+
+            foreach (var nodeId in Context.NodeContext.GetMockNodeIds())
+            {
+                Context.NodeContext.GetMockNode(nodeId).ClearQueues();
+            }
         }
 
         protected void EnqueueRequestVoteSuccessResponse(string mockNodeId)

@@ -112,6 +112,9 @@ namespace Coracle.Raft.Tests.Integration
                 EnqueueAppendEntriesSuccessResponse(MockNodeA);
                 EnqueueAppendEntriesSuccessResponse(MockNodeB);
 
+                EnqueueAppendEntriesSuccessResponse(MockNodeA);
+                EnqueueAppendEntriesSuccessResponse(MockNodeB);
+
                 clientHandlingResult = await Context.GetService<ICommandExecutor>()
                     .Execute(Command, CancellationToken.None);
 

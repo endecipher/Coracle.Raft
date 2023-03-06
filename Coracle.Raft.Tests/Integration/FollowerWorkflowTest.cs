@@ -153,6 +153,8 @@ namespace Coracle.Raft.Tests.Integration
                 .Response.VoteGranted
                 .Should().BeTrue("As Vote should be granted to the first sender");
 
+            Cleanup();
+
             #endregion
         }
 
@@ -273,6 +275,8 @@ namespace Coracle.Raft.Tests.Integration
             appendEntriesResponse
                .Response.FirstIndexOfConflictingEntryTermOnFailure
                .Should().BeNull("As entries are non-conflicting and it should be successful");
+
+            Cleanup();
             #endregion
         }
 
@@ -382,6 +386,8 @@ namespace Coracle.Raft.Tests.Integration
             appendEntriesResponse
                .Response.FirstIndexOfConflictingEntryTermOnFailure
                .Should().BeNull("As acknowledgement should be successful");
+
+            Cleanup();
             #endregion
         }
 
@@ -508,6 +514,7 @@ namespace Coracle.Raft.Tests.Integration
                .Response.FirstIndexOfConflictingEntryTermOnFailure
                .Should().BeNull("As there should be no conflicts");
 
+            Cleanup();
             #endregion
         }
 
@@ -617,6 +624,8 @@ namespace Coracle.Raft.Tests.Integration
             appendEntriesResponse
                .Response.FirstIndexOfConflictingEntryTermOnFailure
                .Should().BeNull("As acknowledgement should be successful");
+
+            Cleanup();
             #endregion
         }
 
@@ -766,7 +775,7 @@ namespace Coracle.Raft.Tests.Integration
                .Response.FirstIndexOfConflictingEntryTermOnFailure
                .Should().BeNull("As there should be no conflicts");
 
-
+            Cleanup();
 
             #endregion
         }

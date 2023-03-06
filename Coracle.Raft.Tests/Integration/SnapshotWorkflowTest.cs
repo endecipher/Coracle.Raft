@@ -118,6 +118,9 @@ namespace Coracle.Raft.Tests.Integration
                 EnqueueAppendEntriesSuccessResponse(MockNodeA);
                 EnqueueAppendEntriesSuccessResponse(MockNodeB);
 
+                EnqueueAppendEntriesSuccessResponse(MockNodeA);
+                EnqueueAppendEntriesSuccessResponse(MockNodeB);
+
                 clientHandlingResult = await Context.GetService<ICommandExecutor>()
                     .Execute(Command, CancellationToken.None);
 
@@ -196,11 +199,14 @@ namespace Coracle.Raft.Tests.Integration
 
             #region Act
 
+            int committingFailureEncountered = 0;
+
             Exception caughtException = null;
             CommandExecutionResult clientHandlingResult = null;
 
             StateCapture captureAfterCommands = null;
             var threshold = Context.GetService<IEngineConfiguration>().SnapshotThresholdSize;
+            var buffer = Context.GetService<IEngineConfiguration>().SnapshotBufferSizeFromLastEntry;
 
             var lastIndex = await Context.GetService<IPersistentStateHandler>().GetLastIndex();
 
@@ -211,9 +217,12 @@ namespace Coracle.Raft.Tests.Integration
             try
             {
                 // Add new commands until threshold surpasses
-                for (int i = (int)nextIndexToStart; i <= threshold + 1; i++)
+                for (int i = (int)nextIndexToStart; i <= (threshold + buffer); i++)
                 {
                     var (Command, Note) = TestAddCommand();
+
+                    EnqueueAppendEntriesSuccessResponse(MockNodeA);
+                    EnqueueAppendEntriesSuccessResponse(MockNodeB);
 
                     EnqueueAppendEntriesSuccessResponse(MockNodeA);
                     EnqueueAppendEntriesSuccessResponse(MockNodeB);
@@ -224,7 +233,10 @@ namespace Coracle.Raft.Tests.Integration
                     commitIndexUpdated.Wait(EventNotificationTimeOut);
 
                     if (!commitIndexUpdated.IsConditionMatched)
+                    {
+                        committingFailureEncountered = i;
                         break;
+                    }
                 }
 
                 captureAfterCommands = new StateCapture(Context.GetService<ICurrentStateAccessor>().Get());
@@ -232,8 +244,6 @@ namespace Coracle.Raft.Tests.Integration
                 snapshotBuilt.Wait(EventNotificationTimeOut);
 
                 info = await (Context.GetService<IPersistentStateHandler>() as SampleVolatileStateHandler).HasCommittedSnapshot(lastIndex);
-
-
             }
             catch (Exception e)
             {
@@ -247,11 +257,14 @@ namespace Coracle.Raft.Tests.Integration
             var assertableQueue = StartAssertions(notifiableQueue);
 
             caughtException
-                .Should().Be(null, $" ");
+                .Should().Be(null);
+
+            committingFailureEncountered
+                .Should().Be(0);
 
             captureAfterCommands
                 .CommitIndex
-                .Should().Be(threshold + 1, "The commit Index should be 6, as the comands have been replicated to other nodes");
+                .Should().Be(threshold + buffer, $"The commit Index should be 6 or (Threshold: {threshold} + Buffer: {buffer}), as the comands have been replicated to other nodes");
 
             snapshotBuilt.IsConditionMatched.Should().BeTrue();
 

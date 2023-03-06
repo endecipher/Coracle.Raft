@@ -84,5 +84,11 @@ namespace Coracle.Raft.Tests.Components.Helper
             }
             throw new InvalidOperationException($"No Programs Enqueued for {typeof(TInput).AssemblyQualifiedName} and {typeof(TResponse).AssemblyQualifiedName}");
         }
+
+        public void Clear()
+        {
+            Programs.Clear();
+            RemoteCalls.Clear();
+        }
     }
 }

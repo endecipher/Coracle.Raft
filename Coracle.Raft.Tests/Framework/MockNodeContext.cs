@@ -32,6 +32,8 @@ namespace Coracle.Raft.Tests.Framework
         void CreateMockNode(string nodeId);
 
         MockNodeController GetMockNode(string nodeId);
+
+        ICollection<string> GetMockNodeIds();
     }
 
     public class MockNodeContext : IMockNodeContext
@@ -58,6 +60,11 @@ namespace Coracle.Raft.Tests.Framework
             bool isFound = MockNodes.TryGetValue(nodeId, out var node);
 
             if (isFound) { return node; } else throw new InvalidOperationException();
+        }
+
+        public ICollection<string> GetMockNodeIds()
+        {
+            return MockNodes.Keys;
         }
     }
 }

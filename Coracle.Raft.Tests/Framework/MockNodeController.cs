@@ -60,7 +60,12 @@ namespace Coracle.Raft.Tests.Framework
         }
 
         public void ApproveNextAppendEntriesInLine() => AppendEntriesLock.ApproveNextInLine();
+
+        public void ClearQueues()
+        {
+            AppendEntriesLock.Clear();
+            InstallSnapshotLock.Clear();
+            RequestVoteLock.Clear();
+        }
     }
-
-
 }

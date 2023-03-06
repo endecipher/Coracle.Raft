@@ -127,6 +127,7 @@ namespace Coracle.Raft.Tests.Integration
                 .IsInitialized
                 .Should().BeTrue("- post Initialzation the flag should be marked true");
 
+            Cleanup();
             #endregion
         }
 
@@ -187,6 +188,8 @@ namespace Coracle.Raft.Tests.Integration
                 .GetService<IClusterConfiguration>()
                 .ThisNode.UniqueNodeId
                 .Should().BeEquivalentTo(SUT, "- ThisNode details should not change");
+
+            Cleanup();
 
             return Task.CompletedTask;
             #endregion
@@ -426,6 +429,9 @@ namespace Coracle.Raft.Tests.Integration
                 EnqueueAppendEntriesSuccessResponse(MockNodeA);
                 EnqueueAppendEntriesSuccessResponse(MockNodeB);
 
+                EnqueueAppendEntriesSuccessResponse(MockNodeA);
+                EnqueueAppendEntriesSuccessResponse(MockNodeB);
+
                 clientHandlingResult = await Context.GetService<ICommandExecutor>()
                     .Execute(Command, CancellationToken.None);
 
@@ -463,10 +469,6 @@ namespace Coracle.Raft.Tests.Integration
                 .CurrentTerm
                 .Should().Be(captureBeforeCandidacy.CurrentTerm + 1, "Since before candidacy, the term should be 1 lesser");
 
-
-
-
-
             captureJustAfterLeaderStateChange
                 .CommitIndex
                 .Should().Be(0, "CommitIndex should be zero, since leader has just been established, and NoOp entry not sent out yet/currenty being sent out");
@@ -474,10 +476,6 @@ namespace Coracle.Raft.Tests.Integration
             captureJustAfterLeaderStateChange
                 .CurrentTerm
                 .Should().Be(captureAfterCandidacy.CurrentTerm, "Since Leader was elected in the candidacy election itself");
-
-
-
-
 
             captureAfterSuccessfulAppendEntries
                 .CommitIndex
@@ -493,10 +491,6 @@ namespace Coracle.Raft.Tests.Integration
                 .Should()
                 .Match(i => i.All(_ => _.Equals(2)),
                     $"{MockNodeA} and {MockNodeB} should have had replicated the NoOp entry, i.e up until the leader's last log index, and the nextIndex to send for each peer mock node should be one greater, i.e 2");
-
-
-
-
 
             Context.GetService<INoteStorage>()
                 .TryGet(Note.UniqueHeader, out var note)
