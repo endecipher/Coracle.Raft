@@ -3,19 +3,28 @@
     <TargetFramework>net6.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>disable</Nullable>
-    <GeneratePackageOnBuild>False</GeneratePackageOnBuild>
+
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <PackageId>Coracle.Raft.Examples</PackageId>
+    <PackageVersion>1.0.1</PackageVersion>
     <Authors>Ayan Choudhury</Authors>
     <Product>Coracle.Raft.Examples</Product>
+    <Description>An example use case of Coracle.Raft in .NET</Description>
     <Copyright>Copyright © 2023 Ayan Choudhury</Copyright>
+    <PackageTags>Raft;Consensus;Replication;State;Machine;Paxos;Coracle;Replicated;Fault;Tolerant;LogEntry;Election;Log;Replication;Safety;Leader;Majority;Quorum;Term;Vote;Commit;Snapshot;Follower;Candidate;Processing;Async;Asynchronous;</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageIcon>packageIcon.png</PackageIcon>
     <RepositoryUrl>https://github.com/endecipher/Coracle.Raft</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+    <GenerateDocumentationFile>False</GenerateDocumentationFile>
+    <PackageReleaseNotes>v1.0.1 - Initial release</PackageReleaseNotes>
   </PropertyGroup>
 
-  <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>disable</Nullable>
-  </PropertyGroup>
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+    <None Include="packageIcon.png" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Coracle.Raft\Coracle.Raft.csproj" />
