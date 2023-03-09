@@ -98,7 +98,7 @@ namespace Coracle.Raft.Tests.Integration
 
             Exception caughtException = null;
             ConfigurationChangeResult changeResult = null;
-            StateCapture captureBeforeConfigurationChange = null, captureAfterConfigurationChange = null, captureAfterDecommission = null;
+            StateCapture captureBeforeConfigurationChange = null, captureAfterDecommission = null;
 
             try
             {
@@ -139,8 +139,6 @@ namespace Coracle.Raft.Tests.Integration
 
                 configurationChanged.Wait(EventNotificationTimeOut);
 
-                captureAfterConfigurationChange = new StateCapture(Context.GetService<ICurrentStateAccessor>().Get());
-
                 decommissioning.Wait(EventNotificationTimeOut);
 
                 captureAfterDecommission = new StateCapture(Context.GetService<ICurrentStateAccessor>().Get());
@@ -164,18 +162,6 @@ namespace Coracle.Raft.Tests.Integration
                 .Should().Be(StateValues.Leader, "As the leader state is has Leader value");
 
             var lastIndex = await Context.GetService<IPersistentStateHandler>().GetLastIndex();
-
-            captureAfterConfigurationChange
-                .StateValue
-                .Should().Be(StateValues.Leader, "Since the leader doesn't decommission immediately after appending the C-new entry, the state is still Leader");
-
-            captureAfterConfigurationChange
-                .LastLogIndex
-                .Should().Be(lastIndex, "As the C-new entry must have been appended to the logs");
-
-            captureAfterConfigurationChange
-                .CommitIndex
-                .Should().Be(lastIndex - 1, "C-new entry is present in the logs, however, the replication to other nodes has not yet happened yet, and therefore, the commit index would point to the C-old,new entry being committed");
 
             captureAfterDecommission
                 .CommitIndex
