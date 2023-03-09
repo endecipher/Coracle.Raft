@@ -9,7 +9,7 @@
     <PackageVersion>1.0.1</PackageVersion>
     <Authors>Ayan Choudhury</Authors>
     <Product>Coracle.Raft</Product>
-    <Description>Cluster-ize your functionality and build your own replicated state machine using this completely extensible implementation of the Raft consensus algorithm in .NET</Description>
+    <Description>Clusterize your functionality and build your own replicated state machine using this completely extensible implementation of the Raft consensus algorithm in .NET</Description>
     <Copyright>Copyright © 2023 Ayan Choudhury</Copyright>
     <PackageTags>Raft;Consensus;Replication;State;Machine;Paxos;Coracle;Replicated;Fault;Tolerant;LogEntry;Election;Log;Replication;Safety;Leader;Majority;Quorum;Term;Vote;Commit;Snapshot;Follower;Candidate;Processing;Async;Asynchronous;</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -17,6 +17,8 @@
     <PackageIcon>packageIcon.png</PackageIcon>
     <RepositoryUrl>https://github.com/endecipher/Coracle.Raft</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+    <GenerateDocumentationFile>False</GenerateDocumentationFile>
+    <PackageReleaseNotes>v1.0.1 - Initial Release</PackageReleaseNotes>
   </PropertyGroup>
 
   <ItemGroup>
