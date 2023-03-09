@@ -34,3 +34,4 @@ ipch/
 *.vssscc
 *.bak.*
 *.bak
+.vs/
