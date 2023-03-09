@@ -3,9 +3,8 @@ on:
   push:
   pull_request:
     branches: [ "main" ]
-    paths:
-    - '**.cs'
-    - '**.csproj'
+    paths-ignore:
+      - '**/README.md'
 jobs:
   build:
     name: build-${{matrix.os}}
