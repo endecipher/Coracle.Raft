@@ -35,3 +35,4 @@ ipch/
 *.bak.*
 *.bak
 .vs/
+*CONCISE.md
